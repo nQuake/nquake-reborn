@@ -15,6 +15,8 @@ export function renderInstallReadme(
     executableBitsSet?: boolean;
     /** Set when files are waiting under a `.nqinstall` name (see paths.ts). */
     fixupScript?: string | null;
+    /** The install folder's own name, for the `cd` in the fixup hint. */
+    folderName?: string;
   } = {},
 ): string {
   const out: string[] = [];
@@ -37,12 +39,19 @@ export function renderInstallReadme(
       "Chrome and Edge are not allowed to create .cfg or .dll files on Windows,",
     );
     out.push(
-      `so those were written with a .nqinstall suffix. Double-click ${opts.fixupScript}`,
+      `so those were written with a .nqinstall suffix. Run ${opts.fixupScript} once`,
     );
     out.push(
-      "in this folder once to put them under their real names, then delete it.",
+      "to put them under their real names, then delete it. Nothing below works",
     );
-    out.push("Nothing below works until you have.");
+    out.push("until you have.");
+    out.push("");
+    out.push("Double-click it in this folder, or from a command prompt:");
+    // A browser only ever learns the folder's name, never its path — the rest
+    // is the user's to fill in. The script cds to its own directory anyway;
+    // this is so a pasted command lands somewhere sensible.
+    out.push(`  cd /d "C:\\path\\to\\${opts.folderName || "nquake"}"`);
+    out.push(`  ${opts.fixupScript}`);
     out.push("");
   }
 

@@ -361,6 +361,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       renderInstallReadme(options, plan, installerVersion, new Date(now()), {
         executableBitsSet: destination.canSetExecutable,
         fixupScript,
+        folderName: destination.name,
       }),
     );
     const executables = okItems.filter((i) => i.executable).map((i) => i.dest);

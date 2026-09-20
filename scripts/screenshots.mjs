@@ -158,7 +158,10 @@ function stepsFor(scenario) {
       name: "welcome",
       ready: "[data-testid=cap-mock], [data-testid=cap-real]",
       before: async (p) =>
-        p.waitForSelector("[data-testid=catalog-ready]", { timeout: 60_000 }),
+        p.waitForSelector("[data-testid=catalog-ready]", {
+          state: "attached",
+          timeout: 60_000,
+        }),
     },
     {
       name: "target",
@@ -204,7 +207,7 @@ function stepsFor(scenario) {
         await p.waitForSelector("[data-testid=folder-summary]");
       },
     },
-    { name: "review", ready: "[data-testid=review-files]" },
+    { name: "review", ready: "[data-testid=review-summary]" },
     {
       name: "install",
       ready: "[data-testid=install-progress]",

@@ -334,11 +334,16 @@ export function Badge({
 
 export function KeyValue({
   rows,
+  testId,
 }: {
   rows: [ComponentChildren, ComponentChildren][];
+  testId?: string;
 }) {
   return (
-    <dl className="divide-y divide-line rounded-md border border-line bg-surface-2/60 text-sm">
+    <dl
+      className="divide-y divide-line rounded-md border border-line bg-surface-2/60 text-sm"
+      data-testid={testId}
+    >
       {rows.map(([k, v], i) => (
         <div
           key={i}

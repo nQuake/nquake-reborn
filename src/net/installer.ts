@@ -11,10 +11,15 @@ import {
   parseInstallState,
   type InstallState,
 } from "../domain/install-state.ts";
+import { renderFixupScript, type SidecarRename } from "../domain/configs.ts";
 import { timestampSlug } from "../domain/format.ts";
 import type { Manifest } from "../domain/manifest.ts";
 import type { InstallOptions } from "../domain/options.ts";
-import { browserBlockReason } from "../domain/paths.ts";
+import {
+  SIDECAR_SUFFIX,
+  browserBlockReason,
+  resolveName,
+} from "../domain/paths.ts";
 import {
   renderTemplate,
   type InstallPlan,
@@ -59,6 +64,14 @@ export interface InstallResult {
   failed: { item: PlanItem; error: string }[];
   /** Planned files this surface cannot name at all, with the reason why. */
   blocked: { dest: string; reason: string }[];
+  /**
+   * Files written beside their destination under a temporary name because
+   * this surface refuses the real one — a browser on Windows and every
+   * `.cfg`. `fixupScript` renames them.
+   */
+  sidecars: SidecarRename[];
+  /** The generated script that puts the sidecars in place, or null. */
+  fixupScript: string | null;
   skipped: number;
   written: number;
   bytes: number;
@@ -97,19 +110,34 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
   const started = now();
   const meter = new RateMeter();
 
-  // Names this surface will not create at all — a browser refuses `.url`,
-  // which is nQuake's `ezquake/Online Manual.url` shortcut. Dropping them
-  // here keeps them out of the totals and out of the failure list, where the
-  // user could do nothing about them anyway.
+  // Names this surface will not create. A browser refuses `.url` (nQuake's
+  // `ezquake/Online Manual.url` shortcut) everywhere, and on Windows it
+  // refuses `.cfg` and `.dll` too — which is every config nQuake ships. The
+  // ones that can be parked under a `.nqinstall` name are, and the fixup
+  // script written at the end moves them into place; the rest are dropped
+  // here, which keeps them out of the totals and out of the failure list,
+  // where the user could do nothing about them anyway.
+  const rules = destination.nameRules;
   const blocked: InstallResult["blocked"] = [];
+  const sidecars: SidecarRename[] = [];
+  const writePath = new Map<string, string>();
   const planItems: PlanItem[] = [];
   for (const it of plan.items) {
-    const reason = destination.restrictsNames
-      ? browserBlockReason(it.dest)
-      : null;
-    if (reason) blocked.push({ dest: it.dest, reason });
-    else planItems.push(it);
+    const resolved = resolveName(it.dest, rules);
+    if (resolved.kind === "drop") {
+      blocked.push({ dest: it.dest, reason: resolved.reason });
+      continue;
+    }
+    if (resolved.kind === "sidecar") {
+      writePath.set(it.dest, resolved.path);
+      sidecars.push({ from: resolved.path, to: it.dest });
+    }
+    planItems.push(it);
   }
+  // The plan item keeps its real destination everywhere the user or the
+  // install record can see it; only the write goes to the sidecar.
+  const pathFor = (dest: string) => writePath.get(dest) ?? dest;
+  let fixupScript: string | null = null;
   const bytesTotal = planItems.reduce((n, it) => n + it.size, 0);
 
   const items = new Map<string, ItemProgress>();
@@ -162,17 +190,24 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     }
   }
 
-  // Back up a played-in config.cfg, as the Windows installer did.
-  if (
-    wantsClient(options) &&
-    (await destination.stat("ezquake/configs/config.cfg"))
-  ) {
+  // Back up a played-in config.cfg, as the Windows installer did. A surface
+  // that refuses to name a `.cfg` can neither see nor rename this one, so
+  // there the fixup script moves it aside just before it puts the new one in
+  // place — otherwise the rename would quietly eat the user's config.
+  const CLIENT_CONFIG = "ezquake/configs/config.cfg";
+  let fixupBackup: { path: string; to: string } | null = null;
+  if (wantsClient(options)) {
     const backup = `config-${timestampSlug(new Date(now()))}.cfg`;
-    await destination.rename("ezquake/configs/config.cfg", backup);
-    log(
-      "info",
-      `Backed up your existing config.cfg as ezquake/configs/${backup}.`,
-    );
+    if (browserBlockReason(CLIENT_CONFIG, rules)) {
+      if (sidecars.some((s) => s.to === CLIENT_CONFIG))
+        fixupBackup = { path: CLIENT_CONFIG, to: backup };
+    } else if (await destination.stat(CLIENT_CONFIG)) {
+      await destination.rename(CLIENT_CONFIG, backup);
+      log(
+        "info",
+        `Backed up your existing config.cfg as ezquake/configs/${backup}.`,
+      );
+    }
   }
 
   const setItem = (it: PlanItem, patch: Partial<ItemProgress>) => {
@@ -184,7 +219,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     it: PlanItem,
     stream: ReadableStream<Uint8Array>,
   ) => {
-    const writable = await destination.openWrite(it.dest);
+    const writable = await destination.openWrite(pathFor(it.dest));
     let itemBytes = 0;
     const counter = new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
@@ -202,7 +237,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
 
   const installOne = async (it: PlanItem) => {
     if (signal?.aborted) return;
-    const existing = await destination.stat(it.dest);
+    const existing = await destination.stat(pathFor(it.dest));
     if (canReuse(it, existing?.size ?? null, previous)) {
       skipped++;
       filesDone++;
@@ -218,7 +253,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       const s = it.source;
       switch (s.kind) {
         case "generated":
-          await destination.writeText(it.dest, s.text);
+          await destination.writeText(pathFor(it.dest), s.text);
           bytesDone += it.size;
           break;
         case "template": {
@@ -230,7 +265,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
             options,
             plan.servers,
           );
-          await destination.writeText(it.dest, rendered);
+          await destination.writeText(pathFor(it.dest), rendered);
           bytesDone += it.size;
           break;
         }
@@ -309,10 +344,23 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       INSTALL_STATE_FILE,
       JSON.stringify(state, null, 2) + "\n",
     );
+    // The one step a browser install on Windows cannot take itself.
+    if (sidecars.length) {
+      const script = renderFixupScript(sidecars, fixupBackup);
+      await destination.writeText(script.path, script.text);
+      fixupScript = script.path;
+      log(
+        "warn",
+        `${sidecars.length} file(s) could not be created under their real names here, ` +
+          `so they were written with a ${SIDECAR_SUFFIX} suffix. ` +
+          `Double-click ${script.path} in the install folder to put them in place.`,
+      );
+    }
     await destination.writeText(
       "README-nquake.txt",
       renderInstallReadme(options, plan, installerVersion, new Date(now()), {
         executableBitsSet: destination.canSetExecutable,
+        fixupScript,
       }),
     );
     const executables = okItems.filter((i) => i.executable).map((i) => i.dest);
@@ -333,6 +381,8 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     ok: !cancelled && failed.length === 0,
     failed,
     blocked,
+    sidecars,
+    fixupScript,
     skipped,
     written,
     bytes: bytesDone,

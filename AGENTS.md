@@ -96,7 +96,7 @@ make bump / make changelog VERSION= # release tooling (read-only / scratch)
 ```
 
 Run `make fmt` before committing; `fmt-check` is its own CI gate. The test
-suite is fast (vitest, ~40 tests) and covers the plan builder, the config
+suite is fast (vitest, ~50 tests) and covers the plan builder, the config
 generators, the install record, the wizard step flow and the installer run
 against a fake transport and destination.
 
@@ -161,10 +161,21 @@ destination — that is how an upstream `mvdsv` wins over the bundled one.
 - **Names a browser cannot create.** Chromium's File System Access API
   refuses `.lnk`, `.scf` and `.url` outright (and CLSID extensions, trailing
   dots, Windows device names) whatever the OS underneath — nQuake ships
-  `ezquake/Online Manual.url`. `domain/paths.ts#browserBlockReason` holds the
-  rule, `Destination.restrictsNames` says whether the surface has it, and
-  `runInstall` drops those items before the run and reports them as
-  `result.blocked` notes rather than failures. Spaces in a name are fine.
+  `ezquake/Online Manual.url`. It *also* refuses every extension Safe
+  Browsing's `download_file_types.asciipb` marks `DANGEROUS` **on the OS the
+  browser runs on**, and on Windows that is `cfg`, `dll`, `ini` and
+  `manifest`: a browser on Windows cannot create one of nQuake's ~150 configs
+  or `ktx/qwprogs.dll`, while the same browser on Linux writes them happily.
+  `move()` validates the new name the same way, so there is no renaming out
+  of it from the page. `domain/paths.ts` holds the rule
+  (`browserBlockReason`, `resolveName`), `Destination.nameRules` says which
+  set a surface has (`"none"` / `"browser"` / `"browser-windows"`, picked
+  from the *host* OS in `fs-access.ts#browserNameRules`), and `runInstall`
+  either drops the item (`result.blocked` notes, never failures) or — on
+  Windows, where the files are the install — writes it beside its
+  destination with a `.nqinstall` suffix (`result.sidecars`) and generates
+  `nquake-finish.bat` (`configs.ts#renderFixupScript`) to move them into
+  place. Spaces in a name are fine; it is always the extension.
 
 Renaming a package or one of the explicitly named paths in distfiles breaks
 this; change both in the same breath.
@@ -201,6 +212,9 @@ and simulated downloads (`platform/mock.ts` streams zeroed bytes at a
 believable rate, capped so a 600 MB pretend install ends in ~25 s), and say
 so in a banner on the welcome, folder, install and done steps. Keep the mock
 path identical to the real one apart from `Destination` and `Transport`.
+`?names=browser-windows` gives the simulated folder a real surface's name
+rules, which is how the Windows finish-the-install screen is seen (and shot)
+without a Windows machine.
 
 ## The desktop shell is thin
 
@@ -231,7 +245,8 @@ renders them). Keep the test ids it clicks: `nav-next`, `mode-*`,
 `install-percent`, `done`, `catalog-ready`. It sets `data-shot` on `<html>`
 so the phone nav renders in flow (see `theme.css`). Playwright is resolved
 from a global install, not a project dependency; `--url` points it at a
-running dev server, `--scenario/--viewport/--theme/--platform` narrow a run.
+running dev server, `--scenario/--viewport/--theme/--platform` narrow a run, and `--names` is
+passed through as the simulated folder's name rules.
 
 ## Design
 
@@ -287,9 +302,14 @@ Conventional Commits; PRs squash-merge, so the PR title is the commit.
   either as expected. A real Chromium install into a folder has now been done
   by a user, and found two things the simulation could not: the browser
   refuses to create `ezquake/Online Manual.url` at all, and nothing set the
-  executable bit on the downloaded AppImage. Both are fixed; the shapes are
-  worth remembering, since the mock destination reproduces neither by
-  default.
+  executable bit on the downloaded AppImage. A Chromium install **on
+  Windows** then found the big one: the same rule refuses `.cfg` and `.dll`,
+  i.e. every config nQuake ships, so those are written with a `.nqinstall`
+  suffix and `nquake-finish.bat` renames them. All three are fixed; the
+  shapes are worth remembering, since the mock destination reproduces none
+  of them unless it is given `nameRules`. Nobody has yet confirmed a real
+  Windows install end to end with the fixup script — the next thing to ask
+  a reporter for.
 - Firefox and Safari have no folder access, so they only get the
   simulation; a "download as zip" fallback (streaming a zip to the browser)
   is the obvious next surface behind the same seam.

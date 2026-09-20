@@ -10,8 +10,12 @@ export function renderInstallReadme(
   plan: InstallPlan,
   version: string,
   now: Date,
-  /** The desktop app chmods what it writes; a browser cannot. */
-  opts: { executableBitsSet?: boolean } = {},
+  opts: {
+    /** The desktop app chmods what it writes; a browser cannot. */
+    executableBitsSet?: boolean;
+    /** Set when files are waiting under a `.nqinstall` name (see paths.ts). */
+    fixupScript?: string | null;
+  } = {},
 ): string {
   const out: string[] = [];
   // Without the bit, `./script.sh` is "Permission denied" — but `sh script.sh`
@@ -25,6 +29,22 @@ export function renderInstallReadme(
   out.push(`Installed: ${now.toISOString()}`);
   out.push(`Platform: ${platformLabel(o.platform)}`);
   out.push("");
+
+  if (opts.fixupScript) {
+    out.push("FIRST: FINISH THE INSTALL");
+    out.push("-------------------------");
+    out.push(
+      "Chrome and Edge are not allowed to create .cfg or .dll files on Windows,",
+    );
+    out.push(
+      `so those were written with a .nqinstall suffix. Double-click ${opts.fixupScript}`,
+    );
+    out.push(
+      "in this folder once to put them under their real names, then delete it.",
+    );
+    out.push("Nothing below works until you have.");
+    out.push("");
+  }
 
   if (o.target !== "server") {
     out.push("PLAYING");

@@ -144,7 +144,7 @@ describe("runInstall", () => {
     const plan = buildPlan(withShortcut, null, options);
     expect(plan.items.some((i) => i.dest.endsWith(".url"))).toBe(true);
 
-    const dest = new MockDestination("browser", true);
+    const dest = new MockDestination("browser", "browser");
     const logs: string[] = [];
     let lastTotal = 0;
     const result = await runInstall({
@@ -185,6 +185,97 @@ describe("runInstall", () => {
     });
     expect(full.blocked).toEqual([]);
     expect(await plain.stat("ezquake/Online Manual.url")).not.toBeNull();
+  });
+
+  it("parks names a browser on Windows refuses and leaves a script to rename them", async () => {
+    // Chromium's Safe Browsing file-type list marks `.cfg` and `.dll` as
+    // DANGEROUS on Windows, so a browser there cannot create a single one of
+    // nQuake's configs. They are written with a `.nqinstall` suffix instead.
+    const withDll: Manifest = {
+      ...manifest,
+      packages: {
+        ...manifest.packages,
+        gpl: {
+          bytes: 40,
+          files: [
+            ...manifest.packages.gpl!.files,
+            { path: "qw/autoexec.cfg", size: 10, sha256: "ae" },
+            { path: "ezquake/configs/config.cfg", size: 4, sha256: "cc" },
+            { path: "ezquake/Online Manual.url", size: 135, sha256: "url" },
+          ],
+        },
+      },
+    };
+    const options = defaultOptions("windows");
+    const plan = buildPlan(withDll, null, options);
+    const dest = new MockDestination("browser", "browser-windows");
+    const logs: string[] = [];
+    const result = await runInstall({
+      plan,
+      options,
+      manifest: withDll,
+      destination: dest,
+      transport: fakeTransport(() => NaN),
+      installerVersion: "0.1.0",
+      onLog: (e) => logs.push(e.message),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.failed).toEqual([]);
+    // Nothing is dropped here: on Windows even the `.url` shortcut can be
+    // parked and renamed afterwards.
+    expect(result.blocked).toEqual([]);
+    const parked = result.sidecars.map((s) => s.to);
+    expect(parked).toContain("qw/autoexec.cfg");
+    expect(parked).toContain("ezquake/configs/preset.cfg");
+    expect(parked).toContain("ezquake/Online Manual.url");
+
+    const w = dest.written();
+    expect(w).toContain("qw/autoexec.cfg.nqinstall");
+    expect(w).not.toContain("qw/autoexec.cfg");
+    // Files the browser can name are untouched.
+    expect(w).toContain("ezquake.exe");
+
+    // The record and the totals still name the real destination.
+    const state = JSON.parse((await dest.readText("nquake-reborn.json"))!);
+    expect(
+      state.files.some((f: { path: string }) => f.path === "qw/autoexec.cfg"),
+    ).toBe(true);
+    expect(
+      state.files.some((f: { path: string }) => f.path.endsWith(".nqinstall")),
+    ).toBe(false);
+
+    expect(result.fixupScript).toBe("nquake-finish.bat");
+    const bat = (await dest.readText("nquake-finish.bat"))!;
+    expect(bat).toContain(
+      'if exist "qw\\autoexec.cfg.nqinstall" move /y "qw\\autoexec.cfg.nqinstall" "qw\\autoexec.cfg" >nul',
+    );
+    // A played-in config.cfg cannot be seen or renamed here, so the script
+    // moves it aside itself rather than the rename eating it.
+    expect(bat).toMatch(
+      /if exist "ezquake\\configs\\config\.cfg" ren "ezquake\\configs\\config\.cfg" "config-[\d-]+\.cfg"/,
+    );
+    expect(bat.indexOf("ren ")).toBeLessThan(
+      bat.indexOf("config.cfg.nqinstall"),
+    );
+    expect(logs.some((m) => m.includes("nquake-finish.bat"))).toBe(true);
+    expect(await dest.readText("README-nquake.txt")).toContain(
+      "FIRST: FINISH THE INSTALL",
+    );
+
+    // The same plan on a surface that writes through the OS is unchanged.
+    const plain = new MockDestination();
+    const full = await runInstall({
+      plan,
+      options,
+      manifest: withDll,
+      destination: plain,
+      transport: fakeTransport(() => NaN),
+      installerVersion: "0.1.0",
+    });
+    expect(full.sidecars).toEqual([]);
+    expect(full.fixupScript).toBeNull();
+    expect(await plain.stat("qw/autoexec.cfg")).not.toBeNull();
   });
 
   it("keeps unchanged files on a second run and backs up config.cfg", async () => {

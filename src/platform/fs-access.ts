@@ -1,11 +1,22 @@
 // The browser's File System Access API as a `Destination`. Chromium desktop
 // only; `capabilities.ts` decides whether this is even offered.
 
+import type { NameRules } from "../domain/paths.ts";
+import { detectPlatform } from "./capabilities.ts";
 import {
   splitPath,
   type Destination,
   type DestinationEntry,
 } from "./destination.ts";
+
+/**
+ * Which names this browser refuses. Chromium's list is longer on Windows —
+ * `.cfg` and `.dll` among them — and it goes by the OS the browser runs on,
+ * not the platform the user is installing *for*.
+ */
+export function browserNameRules(): NameRules {
+  return detectPlatform() === "windows" ? "browser-windows" : "browser";
+}
 
 export async function pickFsAccessDestination(): Promise<FsAccessDestination | null> {
   try {
@@ -25,7 +36,7 @@ export async function pickFsAccessDestination(): Promise<FsAccessDestination | n
 export class FsAccessDestination implements Destination {
   readonly kind = "fs-access";
   readonly canSetExecutable = false;
-  readonly restrictsNames = true;
+  readonly nameRules: NameRules = browserNameRules();
 
   constructor(private root: FileSystemDirectoryHandle) {}
 

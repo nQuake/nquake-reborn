@@ -15,7 +15,7 @@ loop you can iterate in.
 
 ```sh
 npm ci                                  # fresh checkouts have no node_modules
-make test                               # ~1s, 46 tests; establishes a baseline
+make test                               # ~1s, 52 tests; establishes a baseline
 node .agents/skills/debug/scripts/plan.mjs --platform linux --target both
 ```
 
@@ -29,7 +29,8 @@ screenshot usually hands you both the destination and the message.
 
 | What the user sees | What it means | Open |
 | --- | --- | --- |
-| `Cannot create <path>` | The browser's file system API refused the *name*. Not a network problem, and retrying can never help. | `src/domain/paths.ts`, `src/platform/fs-access.ts` |
+| `Cannot create <path>` | The browser's file system API refused the *name*. Not a network problem, and retrying can never help. Note the extension **and the reporter's OS**: the refused set is longer on Windows (`.cfg`, `.dll`, `.ini`, `.manifest`) than anywhere else. | `src/domain/paths.ts`, `src/platform/fs-access.ts` |
+| `Cannot create` on `.cfg` / `.dll`, Windows only | Already fixed: those are written with a `.nqinstall` suffix and `nquake-finish.bat` renames them. A fresh report means the user never ran it, or a surface lost its rules. | `src/domain/paths.ts`, `src/domain/configs.ts#renderFixupScript` |
 | `Expected N bytes, received M` | The manifest and the bytes disagree — usually a stale manifest, or a truncated response. | `src/net/transport.ts`, the manifest's `commit` pin |
 | `HTTP 404` | A package or path was renamed in `nQuake/distfiles` without the plan being changed. | `src/domain/plan.ts`, distfiles `AGENTS.md` |
 | A CORS / network error on a download | Something built a non-`raw.githubusercontent.com` URL. Release assets send no CORS header — that is the whole reason there are no zips. | `src/net/sources.ts` |
@@ -78,10 +79,17 @@ Each script explains its own flags in a header comment; `plan.mjs` and
 appears for one combination is common and the plan is a pure function of them.
 Match the reporter's answers first.
 
-**`--restricted` matters.** The mock destination writes anything, so a bug that
-only happens in a real browser will not reproduce with `?mock=1` or a plain
-dry run. `--restricted` makes the mock refuse the names Chromium refuses,
-which is what makes a browser-only failure visible in Node.
+**`--restricted` matters, and so does which browser it pretends to be.** The
+mock destination writes anything, so a bug that only happens in a real browser
+will not reproduce with `?mock=1` or a plain dry run. `--restricted` gives it
+Chromium's name rules — by default `browser-windows`, the strictest set and
+where most reporters are; `--restricted=browser` is a browser on Linux or
+macOS. Getting this wrong is how the `.cfg` bug survived a dry run that looked
+like a reproduction: the flag only ever modelled the non-Windows rules.
+
+In the app, `?names=browser-windows` does the same to the simulated folder, and
+`shots.sh --names browser-windows` shoots the screens only a Windows install
+shows.
 
 ## Confirming a browser platform rule
 
@@ -94,9 +102,19 @@ file_system_access/file_system_access_manager_impl.cc?format=TEXT" \
   | base64 -d | grep -n "IsSafePathComponent" -A 120
 ```
 
-That function is the complete list of names the File System Access API will
-refuse, and it is where `src/domain/paths.ts` comes from. Keep the two in step:
-if that list grows, so should ours.
+That function is where `src/domain/paths.ts` comes from — but it is only half
+the rule. It ends by delegating to `IsFileTypeDangerous`, i.e. everything Safe
+Browsing's file-type list marks `DANGEROUS` **for the platform the browser is
+running on**, which is a second file and the reason `.cfg` fails on Windows and
+nowhere else:
+
+```sh
+curl -sS "https://chromium.googlesource.com/chromium/src/+/main/components/\
+safe_browsing/content/resources/download_file_types.asciipb?format=TEXT" \
+  | base64 -d | grep -n 'danger_level: DANGEROUS' -B 8
+```
+
+Keep both in step with `paths.ts`: if either list grows, so should ours.
 
 ## Traps in a sandboxed container
 
@@ -119,7 +137,8 @@ if that list grows, so should ours.
 ## Things that look like bugs but aren't
 
 - **Spaces in filenames are fine.** `ktx/configs/usermodes/dmm4cfgs for Rocket
-  Arena maps.txt` installs happily. When a name fails, suspect the extension.
+  Arena maps.txt` installs happily. When a name fails, suspect the extension —
+  and check which OS the reporter is on before deciding the rule.
 - **`skipped` on a second run is the feature**, not a failure: `canReuse` keeps
   unchanged files, so re-running into the same folder is the update path and
   the retry path.
@@ -138,7 +157,8 @@ if that list grows, so should ours.
 ## Poking at a running app
 
 `make dev`, then URL params: `?mock=1` (force simulation),
-`?mode=simple|advanced`, `?platform=windows|linux|macos`, `?theme=dark|light`.
+`?mode=simple|advanced`, `?platform=windows|linux|macos`, `?theme=dark|light`,
+`?names=none|browser|browser-windows` (the simulated folder's name rules).
 The build-time overrides `VITE_MANIFEST_URL` / `VITE_UPSTREAM_URL` point the
 two index files elsewhere — that is how the screenshot harness runs against a
 local `../distfiles/manifest.json` and `tests/fixtures/upstream.json`.
@@ -173,6 +193,24 @@ ezquake/Online Manual.url`, and the reporter guessed it was the spaces.
    run and reports them as notes rather than failures — because a failure the
    user cannot act on is worse than no failure at all.
 5. `dry-run.mjs --restricted` reproduced it before the fix and proved it after.
+
+The same shape, one platform deeper, is the `.cfg` bug: a Windows reporter's
+screenshot listed `qw/autoexec.cfg`, `ezquake/configs/config.cfg` and a dozen
+more, every one of them a `.cfg`. Step 3 is where it is won —
+`IsSafePathComponent` also refuses any extension marked `DANGEROUS` **for the
+platform the browser runs on**, and that list is a file you can read:
+
+```sh
+curl -sS "https://chromium.googlesource.com/chromium/src/+/main/components/\
+safe_browsing/content/resources/download_file_types.asciipb?format=TEXT" \
+  | base64 -d | grep -n 'danger_level: DANGEROUS' -B 8
+```
+
+`cfg`, `dll`, `ini` and `manifest` are on it under `PLATFORM_TYPE_WINDOWS`.
+There the "drop it and note it" fix from the `.url` bug was no use — an nQuake
+without configs is not nQuake — so the bytes go down under a name the API
+allows and a generated `nquake-finish.bat` does the rename, the same way
+`start_ezquake.sh` does the chmod a browser cannot.
 
 The shape generalises: read the error to find the layer, use the pure layer to
 reproduce in a second, confirm platform behaviour against the platform's own

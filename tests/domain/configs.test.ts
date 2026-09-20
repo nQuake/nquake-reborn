@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyPlaceholders,
+  renderClientLaunchScript,
   renderKtxPortCfg,
   renderPresetCfg,
   renderPwdCfg,
@@ -136,5 +137,33 @@ describe("renderStartScripts", () => {
     expect(start.executable).toBe(true);
     expect(start.text).toContain("chmod +x mvdsv");
     expect(start.text).not.toContain("qwfwd.bin");
+  });
+});
+
+describe("renderClientLaunchScript", () => {
+  it("chmods the AppImage and itself before running it on Linux", () => {
+    const script = renderClientLaunchScript("linux")!;
+    expect(script.path).toBe("start_ezquake.sh");
+    expect(script.executable).toBe(true);
+    expect(script.text).toContain("APP=./ezQuake-x86_64.AppImage");
+    // The bit is set before the launch, and on the script itself so that a
+    // browser install needs `sh start_ezquake.sh` only the first time.
+    const chmod = script.text.indexOf('chmod +x "$0" "$APP"');
+    expect(chmod).toBeGreaterThan(-1);
+    expect(script.text.indexOf('exec "$APP"')).toBeGreaterThan(chmod);
+    // Any AppImage will do when the mirror named a different one.
+    expect(script.text).toContain("*.AppImage");
+  });
+
+  it("clears the quarantine flag as well on macOS", () => {
+    const script = renderClientLaunchScript("macos")!;
+    expect(script.executable).toBe(true);
+    expect(script.text).toContain('chmod +x "$0" ezQuake.app/Contents/MacOS/*');
+    expect(script.text).toContain("xattr -dr com.apple.quarantine ezQuake.app");
+    expect(script.text).toContain("exec open ezQuake.app");
+  });
+
+  it("writes nothing on Windows, where the bit does not exist", () => {
+    expect(renderClientLaunchScript("windows")).toBeNull();
   });
 });

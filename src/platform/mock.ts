@@ -11,7 +11,11 @@ export class MockDestination implements Destination {
   readonly canSetExecutable = false;
   private files = new Map<string, { size: number; text?: string }>();
 
-  constructor(readonly name = "nQuake (simulated)") {}
+  constructor(
+    readonly name = "nQuake (simulated)",
+    /** The simulation pretends to be a surface with no name restrictions. */
+    readonly restrictsNames = false,
+  ) {}
 
   async stat(path: string) {
     const f = this.files.get(path);

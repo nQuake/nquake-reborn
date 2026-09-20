@@ -100,19 +100,21 @@ suite is fast (vitest, ~40 tests) and covers the plan builder, the config
 generators, the install record, the wizard step flow and the installer run
 against a fake transport and destination.
 
-Handy URL params for development: `?mock=1` (force simulation),
-`?mode=simple|advanced`, `?platform=windows|linux|macos`, `?theme=dark|light`.
-Build-time overrides `VITE_MANIFEST_URL` / `VITE_UPSTREAM_URL` point the two
-index files elsewhere (the screenshot harness uses a local
-`../distfiles/manifest.json` and `tests/fixtures/upstream.json`).
+**Debugging a bug report starts at `.agents/skills/debug/`** (symlinked as
+`.claude/skills/`). It holds the triage table from error string to file, the
+sandbox traps (no GTK for `cargo check`, no network in the headless browser,
+Playwright's pinned browser revision), the dev URL params and build-time index
+overrides, and scripts that build a plan, run a whole install against the mock
+destination or audit the live catalog — in Node, in a second, without a
+browser.
 
 ## Layout and boundaries
 
 | Layer | Holds | May import |
 | --- | --- | --- |
-| `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
+| `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, client launcher, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `paths.ts` (names a browser cannot create), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
 | `src/net` | `sources.ts` (URLs, index loading, env overrides), `transport.ts` (fetch + retry/backoff; 404 is final), `installer.ts` (`runInstall`: worker pool, progress, failures collected, record + readme + chmod at the end) | domain, platform types |
-| `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
+| `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam — `canSetExecutable`, `restrictsNames`), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
 | `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue…), `Stepper.tsx`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
 | `src/app` | `wizard.ts` (state, flow, catalog loading, install run), `App.tsx` (shell, mode switch, nav), `main.tsx`, `theme.ts` | everything |
 | `tests/` | vitest suites mirroring `src/`; `tests/fixtures/upstream.json` | |
@@ -136,7 +138,9 @@ destination — that is how an upstream `mvdsv` wins over the bundled one.
   (default on), `addon-textures` / `addon-fortress` / `addon-clanarena`
   (opt), `linux` (cfg only, never the tarball), `macosx` (cfg; the old
   `.app` only as fallback), upstream ezQuake for the platform, generated
-  `ezquake/configs/preset.cfg`.
+  `ezquake/configs/preset.cfg`, and on Linux/macOS a generated
+  `start_ezquake.sh` (chmods the AppImage / the `.app` binaries, clears
+  macOS's quarantine flag, then launches).
 - Server: `sv-gpl` (minus `addons/*.sh`), `sv-non-gpl`, `sv-configs`,
   `sv-maps-gpl`, `sv-maps` (default on, 610 MB), `sv-bin-x64` or
   `sv-bin-win32`, upstream MVDSV + KTX replacing `mvdsv[.exe]` and
@@ -150,9 +154,17 @@ destination — that is how an upstream `mvdsv` wins over the bundled one.
   TF in that order; QTV TCP 28000; QWFWD UDP 30000.
 - After the run: `nquake-reborn.json` (what was installed, hashes, options
   with passwords blanked) and `README-nquake.txt`; executable bits are set
-  where the surface can (Tauri) — on the web the generated
-  `start_servers.sh` chmods, and the Done step / readme tell Linux and macOS
-  users to `chmod +x` the client.
+  where the surface can (Tauri) — on the web every generated script chmods
+  itself and what it launches, so the Done step / readme say `sh
+  start_ezquake.sh` / `sh start_servers.sh` for the first run there and
+  `./…` where the bits were set.
+- **Names a browser cannot create.** Chromium's File System Access API
+  refuses `.lnk`, `.scf` and `.url` outright (and CLSID extensions, trailing
+  dots, Windows device names) whatever the OS underneath — nQuake ships
+  `ezquake/Online Manual.url`. `domain/paths.ts#browserBlockReason` holds the
+  rule, `Destination.restrictsNames` says whether the surface has it, and
+  `runInstall` drops those items before the run and reports them as
+  `result.blocked` notes rather than failures. Spaces in a name are fine.
 
 Renaming a package or one of the explicitly named paths in distfiles breaks
 this; change both in the same breath.
@@ -270,9 +282,14 @@ Conventional Commits; PRs squash-merge, so the PR title is the commit.
 - **Verified:** unit tests, build, `cargo check`, the full screenshot
   matrix, and — after merge — the live site loading the distfiles catalog
   and the upstream mirror through CORS in a real Chromium session.
-- **Not yet exercised end to end:** a real install into a folder in Chrome
-  or Edge, a real install through the Tauri app, and the Release workflow's
-  desktop bundles. Treat the first bug report from any of those as expected.
+- **Not yet exercised end to end:** a real install through the Tauri app and
+  the Release workflow's desktop bundles. Treat the first bug report from
+  either as expected. A real Chromium install into a folder has now been done
+  by a user, and found two things the simulation could not: the browser
+  refuses to create `ezquake/Online Manual.url` at all, and nothing set the
+  executable bit on the downloaded AppImage. Both are fixed; the shapes are
+  worth remembering, since the mock destination reproduces neither by
+  default.
 - Firefox and Safari have no folder access, so they only get the
   simulation; a "download as zip" fallback (streaming a zip to the browser)
   is the obvious next surface behind the same seam.
@@ -293,4 +310,5 @@ Conventional Commits; PRs squash-merge, so the PR title is the commit.
 | Which distfiles paths the plan names | `nQuake/distfiles/AGENTS.md` (its "Paths are a contract" list) |
 | The manifest or upstream index shape | `src/domain/manifest.ts` / `upstream.ts`, the generators (`distfiles/scripts/build-manifest.mjs`, `scripts/mirror-upstream.mjs`), and the `schema` number |
 | Anything under `tauri/` | `tauri/README.md`, and re-read "The desktop shell is thin" |
+| A layer boundary, a surface capability or a debugging recipe | `.agents/skills/debug/SKILL.md` |
 | Release / deploy flow | "Deploy, release, changelog" above |

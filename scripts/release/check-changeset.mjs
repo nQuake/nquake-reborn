@@ -40,6 +40,7 @@ const SKIP_PATTERNS = [
   /^tests\//,
   /^\.github\//,
   /^\.agent\//,
+  /^\.agents\//,
   /^\.claude\//,
   /^\.changes\//,
   /^docs\//,

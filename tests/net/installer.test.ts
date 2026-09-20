@@ -124,6 +124,69 @@ describe("runInstall", () => {
     ).toBe(false);
   });
 
+  it("leaves out names a browser cannot create, without failing the run", async () => {
+    // Chromium refuses to create `.url` files at all, which is how nQuake's
+    // `ezquake/Online Manual.url` shortcut turned into an install error.
+    const withShortcut: Manifest = {
+      ...manifest,
+      packages: {
+        ...manifest.packages,
+        gpl: {
+          bytes: 165,
+          files: [
+            ...manifest.packages.gpl!.files,
+            { path: "ezquake/Online Manual.url", size: 135, sha256: "url" },
+          ],
+        },
+      },
+    };
+    const options = defaultOptions("windows");
+    const plan = buildPlan(withShortcut, null, options);
+    expect(plan.items.some((i) => i.dest.endsWith(".url"))).toBe(true);
+
+    const dest = new MockDestination("browser", true);
+    const logs: string[] = [];
+    let lastTotal = 0;
+    const result = await runInstall({
+      plan,
+      options,
+      manifest: withShortcut,
+      destination: dest,
+      transport: fakeTransport(() => NaN),
+      installerVersion: "0.1.0",
+      onLog: (e) => logs.push(e.message),
+      onProgress: (p) => {
+        lastTotal = p.filesTotal;
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.failed).toEqual([]);
+    expect(result.blocked.map((b) => b.dest)).toEqual([
+      "ezquake/Online Manual.url",
+    ]);
+    expect(logs.some((m) => m.includes("Online Manual.url"))).toBe(true);
+    // It is out of the totals and out of the record, not a missing file.
+    expect(lastTotal).toBe(plan.items.length - 1);
+    const state = JSON.parse((await dest.readText("nquake-reborn.json"))!);
+    expect(
+      state.files.some((f: { path: string }) => f.path.endsWith(".url")),
+    ).toBe(false);
+
+    // A surface that writes through the OS still gets it.
+    const plain = new MockDestination();
+    const full = await runInstall({
+      plan,
+      options,
+      manifest: withShortcut,
+      destination: plain,
+      transport: fakeTransport(() => NaN),
+      installerVersion: "0.1.0",
+    });
+    expect(full.blocked).toEqual([]);
+    expect(await plain.stat("ezquake/Online Manual.url")).not.toBeNull();
+  });
+
   it("keeps unchanged files on a second run and backs up config.cfg", async () => {
     const options = defaultOptions("windows");
     const plan = buildPlan(manifest, null, options);

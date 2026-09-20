@@ -14,6 +14,7 @@ import {
 import { timestampSlug } from "../domain/format.ts";
 import type { Manifest } from "../domain/manifest.ts";
 import type { InstallOptions } from "../domain/options.ts";
+import { browserBlockReason } from "../domain/paths.ts";
 import {
   renderTemplate,
   type InstallPlan,
@@ -56,6 +57,8 @@ export interface InstallLogEntry {
 export interface InstallResult {
   ok: boolean;
   failed: { item: PlanItem; error: string }[];
+  /** Planned files this surface cannot name at all, with the reason why. */
+  blocked: { dest: string; reason: string }[];
   skipped: number;
   written: number;
   bytes: number;
@@ -93,8 +96,24 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
   const concurrency = args.concurrency ?? 6;
   const started = now();
   const meter = new RateMeter();
+
+  // Names this surface will not create at all — a browser refuses `.url`,
+  // which is nQuake's `ezquake/Online Manual.url` shortcut. Dropping them
+  // here keeps them out of the totals and out of the failure list, where the
+  // user could do nothing about them anyway.
+  const blocked: InstallResult["blocked"] = [];
+  const planItems: PlanItem[] = [];
+  for (const it of plan.items) {
+    const reason = destination.restrictsNames
+      ? browserBlockReason(it.dest)
+      : null;
+    if (reason) blocked.push({ dest: it.dest, reason });
+    else planItems.push(it);
+  }
+  const bytesTotal = planItems.reduce((n, it) => n + it.size, 0);
+
   const items = new Map<string, ItemProgress>();
-  for (const it of plan.items)
+  for (const it of planItems)
     items.set(it.dest, { status: "pending", bytes: 0 });
   const failed: InstallResult["failed"] = [];
   let skipped = 0;
@@ -113,15 +132,19 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     lastEmit = t;
     args.onProgress?.({
       bytesDone,
-      bytesTotal: plan.totalBytes,
+      bytesTotal,
       filesDone,
-      filesTotal: plan.items.length,
+      filesTotal: planItems.length,
       rate: meter.rate(t),
-      eta: meter.eta(plan.totalBytes - bytesDone, t),
+      eta: meter.eta(bytesTotal - bytesDone, t),
       active: [...active],
       items,
     });
   };
+
+  for (const b of blocked) {
+    log("warn", `${b.dest} was not installed: ${b.reason}.`);
+  }
 
   // Previous install record, for the "unchanged file" skip.
   let previous: InstallState | null = null;
@@ -252,7 +275,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
 
   // Worker pool. Big files first so the tail of the install isn't one
   // 100 MB texture pack downloading alone.
-  const queue = [...plan.items].sort((a, b) => b.size - a.size);
+  const queue = [...planItems].sort((a, b) => b.size - a.size);
   let index = 0;
   const workers = Array.from(
     { length: Math.min(concurrency, queue.length) },
@@ -267,7 +290,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
 
   const cancelled = signal?.aborted ?? false;
   if (!cancelled) {
-    const okItems = plan.items.filter(
+    const okItems = planItems.filter(
       (i) => items.get(i.dest)?.status !== "failed",
     );
     const state = createInstallState(
@@ -288,7 +311,9 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     );
     await destination.writeText(
       "README-nquake.txt",
-      renderInstallReadme(options, plan, installerVersion, new Date(now())),
+      renderInstallReadme(options, plan, installerVersion, new Date(now()), {
+        executableBitsSet: destination.canSetExecutable,
+      }),
     );
     const executables = okItems.filter((i) => i.executable).map((i) => i.dest);
     if (executables.length && destination.canSetExecutable) {
@@ -307,6 +332,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
   return {
     ok: !cancelled && failed.length === 0,
     failed,
+    blocked,
     skipped,
     written,
     bytes: bytesDone,

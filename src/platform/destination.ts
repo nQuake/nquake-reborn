@@ -24,6 +24,11 @@ export interface Destination {
   setExecutable(paths: string[]): Promise<void>;
   /** Whether `setExecutable` actually does anything here. */
   readonly canSetExecutable: boolean;
+  /**
+   * Whether this surface refuses some file names outright — the browser's
+   * file system API does (see `domain/paths.ts`); the OS-backed ones do not.
+   */
+  readonly restrictsNames: boolean;
 }
 
 export function splitPath(path: string): { dirs: string[]; name: string } {

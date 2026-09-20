@@ -14,18 +14,26 @@ The installer is three pure things and two impure ones.
   `pak1.pak`. Later items replace earlier ones with the same destination,
   which is how an upstream `mvdsv` wins over the bundled one.
 - **Configs** (`src/domain/configs.ts`) — the strings the plan writes:
-  `preset.cfg`, `portN.cfg`, `pwd.cfg`, `qtv.cfg`, `qwfwd.cfg`, start/stop
-  scripts per platform.
+  `preset.cfg`, `portN.cfg`, `pwd.cfg`, `qtv.cfg`, `qwfwd.cfg`, the
+  `start_ezquake.sh` client launcher and the start/stop scripts per platform.
+  Every generated shell script chmods itself and what it launches, because a
+  browser cannot set the executable bit.
+- **Paths** (`src/domain/paths.ts`) — the names a browser install can never
+  create. Chromium's File System Access API rejects `.lnk`, `.scf` and `.url`
+  on every OS, and nQuake ships `ezquake/Online Manual.url`.
 
 ## Impure
 
 - **Destination** (`src/platform/destination.ts`) — the folder. Three
   implementations: File System Access (browser), Tauri (desktop app), mock
-  (simulation).
+  (simulation). Two capability flags say what a surface can do:
+  `canSetExecutable` (only Tauri) and `restrictsNames` (only the browser).
 - **Installer** (`src/net/installer.ts`) — a worker pool that walks the plan
   through a `Transport` into a `Destination`, largest files first, reporting
   progress, keeping unchanged files (`install-state.ts`), collecting
   failures, and finishing with `nquake-reborn.json` and `README-nquake.txt`.
+  Items the surface cannot name are dropped before the run and reported as
+  `result.blocked` notes, not failures — retrying could never fix them.
 
 ## Data sources
 

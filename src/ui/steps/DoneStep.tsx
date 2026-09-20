@@ -51,19 +51,19 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
         partial ? (
           <Callout tone="warn" title="Installed with errors">
             {r?.failed.length} file(s) didn't make it. Run the installer again
-            into the same folder to fetch just those.
+            into the same folder to pick up the rest.
           </Callout>
         ) : (
           <Callout tone="success" title="nQuake is installed">
             {r &&
-              `${r.written.toLocaleString()} files written${r.skipped ? `, ${r.skipped.toLocaleString()} already up to date` : ""}, ${formatBytes(r.bytes)} in ${formatDuration(r.durationMs / 1000)}.`}
+              `${formatBytes(r.bytes)} downloaded in ${formatDuration(r.durationMs / 1000)}.`}
           </Callout>
         )
       ) : (
         <Callout tone="warn" title="That was the simulation">
-          Nothing was downloaded to this device. On a computer, the same steps
-          put a playable nQuake in the folder you choose — try it in Chrome or
-          Edge, or with the desktop app.
+          Nothing was installed on this device. On a computer, the same steps
+          leave you with a playable nQuake — try it in Chrome or Edge, or with
+          the desktop app.
         </Callout>
       )}
 
@@ -84,9 +84,7 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
                 {sh("start_ezquake.sh")}
               </code>
               <span className="mt-2 block text-xs text-muted">
-                The launcher sets the executable bit on the AppImage and starts
-                it — after the first run <code>./start_ezquake.sh</code> works
-                too.
+                After the first run <code>./start_ezquake.sh</code> works too.
               </span>
             </p>
           )}
@@ -97,9 +95,8 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
                 {sh("start_ezquake.sh")}
               </code>
               <span className="mt-2 block text-xs text-muted">
-                The launcher sets the executable bits, clears the macOS
-                quarantine flag and opens <code>ezQuake.app</code> — after that
-                you can launch it from Finder.
+                It opens <code>ezQuake.app</code> — after that you can launch it
+                from Finder.
               </span>
             </p>
           )}
@@ -117,9 +114,8 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
               </>
             ) : (
               <>
-                Run <code>{sh("start_servers.sh")}</code> in the folder — it
-                sets the executable bits and starts each process in a restart
-                loop. <code>{sh("stop_servers.sh")}</code> stops them.
+                Run <code>{sh("start_servers.sh")}</code> in the folder;{" "}
+                <code>{sh("stop_servers.sh")}</code> stops it again.
               </>
             )}
           </p>
@@ -143,9 +139,8 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
             />
           </div>
           <p className="mt-2 text-xs text-muted">
-            Open those ports in your firewall. Passwords are in{" "}
-            <code>ktx/pwd.cfg</code> and <code>qtv/qtv.cfg</code>; everything
-            above is also in <code>README-nquake.txt</code>.
+            Open those ports in your firewall. Everything above is also in{" "}
+            <code>README-nquake.txt</code>.
           </p>
         </div>
       )}

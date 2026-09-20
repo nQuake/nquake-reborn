@@ -9,8 +9,12 @@ import {
 import { Button, Callout, ProgressBar } from "../primitives.tsx";
 
 export function InstallStep({ ctx }: { ctx: WizardCtx }) {
-  const { run, plan, startInstall, cancelInstall, next, back, caps } = ctx;
+  const { run, plan, startInstall, cancelInstall, next, back, caps, mode } =
+    ctx;
   const [showLog, setShowLog] = useState(false);
+  // Simple mode shows one bar, a percentage and the files going past. The
+  // per-package breakdown and the log are Advanced's (or a failure's).
+  const detailed = mode === "advanced";
 
   useEffect(() => {
     if (run.status === "idle") startInstall();
@@ -28,7 +32,7 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
   const fraction = p && p.bytesTotal > 0 ? p.bytesDone / p.bytesTotal : 0;
 
   const groups = useMemo(() => {
-    if (!plan) return [];
+    if (!plan || !detailed) return [];
     return plan.groups.map((g) => {
       let done = 0;
       let failed = 0;
@@ -44,7 +48,7 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
       }
       return { ...g, done, failed };
     });
-  }, [plan, p]);
+  }, [plan, p, detailed]);
 
   const running = run.status === "running";
   const failedItems = run.result?.failed ?? [];
@@ -107,7 +111,7 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
 
       {!caps.realInstall && (
         <Callout tone="warn">
-          Simulated: the numbers move, the network stays quiet.
+          Simulated — the numbers move, nothing is downloaded.
         </Callout>
       )}
 
@@ -137,6 +141,8 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
         ))}
       </ul>
 
+      {/* The file names going past are the proof that something is happening;
+          they stay in Simple mode. */}
       {p && running && p.active.length > 0 && (
         <div
           className="truncate font-mono text-xs text-muted"
@@ -163,10 +169,7 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
               <li>{run.log[run.log.length - 1]?.message}</li>
             )}
           </ul>
-          <p className="mt-2 text-sm">
-            Retrying re-downloads only what's missing; everything that landed is
-            kept.
-          </p>
+          <p className="mt-2 text-sm">Retrying only fetches what's missing.</p>
         </Callout>
       )}
 
@@ -200,7 +203,7 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
             <Button onClick={back}>Back</Button>
           </>
         )}
-        {run.log.length > 0 && (
+        {run.log.length > 0 && (detailed || run.status === "failed") && (
           <Button variant="ghost" onClick={() => setShowLog((v) => !v)}>
             {showLog ? "Hide log" : `Log (${run.log.length})`}
           </Button>

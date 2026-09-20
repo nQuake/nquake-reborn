@@ -38,20 +38,18 @@ export function FolderStep({ ctx }: { ctx: WizardCtx }) {
   return (
     <div className="flex flex-col gap-6">
       <p className="text-sm text-fg">
-        Choose where nQuake should live. Anywhere you own is fine —{" "}
-        <code>{suggested}</code> is the classic spot.{" "}
+        Where should nQuake live? <code>{suggested}</code> is a good spot.{" "}
         {options.platform === "windows" && (
           <span className="text-muted">
-            Avoid Program Files: the game needs to write configs, demos and
-            screenshots next to itself.
+            Not Program Files — the game needs to write next to itself.
           </span>
         )}
       </p>
 
       {!caps.realInstall && (
         <Callout tone="warn" title="Simulation">
-          No folder is opened and nothing is written on this device. The rest of
-          the installer runs exactly as it would for real.
+          Nothing is written on this device — the rest of the installer runs
+          exactly as it would for real.
         </Callout>
       )}
 
@@ -72,7 +70,7 @@ export function FolderStep({ ctx }: { ctx: WizardCtx }) {
         </Button>
         {caps.surface === "web" && caps.realInstall && (
           <span className="text-xs text-muted">
-            The browser will ask you to allow saving into the folder.
+            Your browser will ask you to allow saving into it.
           </span>
         )}
       </div>
@@ -103,9 +101,7 @@ export function FolderStep({ ctx }: { ctx: WizardCtx }) {
                 ? ([
                     [
                       "Installed before",
-                      <Badge tone="info">
-                        by this installer — unchanged files will be kept
-                      </Badge>,
+                      <Badge tone="info">yes — this will update it</Badge>,
                     ],
                   ] as [string, preact.ComponentChildren][])
                 : []),
@@ -113,7 +109,7 @@ export function FolderStep({ ctx }: { ctx: WizardCtx }) {
                 ? ([
                     [
                       "Your config",
-                      "config.cfg will be backed up with a timestamp",
+                      "will be backed up before anything changes",
                     ],
                   ] as [string, preact.ComponentChildren][])
                 : []),
@@ -129,9 +125,8 @@ export function FolderStep({ ctx }: { ctx: WizardCtx }) {
             />
           )}
           {folder.summary.existingInstall && (
-            <Callout tone="info" title="Update mode">
-              Files that already exist with the right size are kept; new and
-              changed files are downloaded.
+            <Callout tone="info" title="Update">
+              Only what's missing or out of date will be downloaded.
             </Callout>
           )}
         </div>

@@ -153,6 +153,17 @@ describe("buildPlan — client", () => {
     expect(d).toContain("ezquake/configs/platform.cfg");
     const app = plan.items.find((i) => i.dest === "ezQuake-x86_64.AppImage");
     expect(app?.executable).toBe(true);
+    // A browser cannot chmod that AppImage, so the launcher does it instead.
+    const launch = plan.items.find((i) => i.dest === "start_ezquake.sh");
+    expect(launch?.executable).toBe(true);
+    expect(launch?.source.kind).toBe("generated");
+  });
+
+  it("generates the client launcher on macOS but not on Windows", () => {
+    const mac = dests(buildPlan(manifest, upstream, defaultOptions("macos")));
+    expect(mac).toContain("start_ezquake.sh");
+    const win = dests(buildPlan(manifest, upstream, defaultOptions("windows")));
+    expect(win).not.toContain("start_ezquake.sh");
   });
 
   it("drops the GPL maps and readme when pak1 is supplied", () => {

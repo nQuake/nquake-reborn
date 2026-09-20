@@ -25,6 +25,7 @@ export async function pickFsAccessDestination(): Promise<FsAccessDestination | n
 export class FsAccessDestination implements Destination {
   readonly kind = "fs-access";
   readonly canSetExecutable = false;
+  readonly restrictsNames = true;
 
   constructor(private root: FileSystemDirectoryHandle) {}
 

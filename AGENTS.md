@@ -110,9 +110,9 @@ index files elsewhere (the screenshot harness uses a local
 
 | Layer | Holds | May import |
 | --- | --- | --- |
-| `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
+| `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, client launcher, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `paths.ts` (names a browser cannot create), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
 | `src/net` | `sources.ts` (URLs, index loading, env overrides), `transport.ts` (fetch + retry/backoff; 404 is final), `installer.ts` (`runInstall`: worker pool, progress, failures collected, record + readme + chmod at the end) | domain, platform types |
-| `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
+| `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam — `canSetExecutable`, `restrictsNames`), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
 | `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue…), `Stepper.tsx`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
 | `src/app` | `wizard.ts` (state, flow, catalog loading, install run), `App.tsx` (shell, mode switch, nav), `main.tsx`, `theme.ts` | everything |
 | `tests/` | vitest suites mirroring `src/`; `tests/fixtures/upstream.json` | |
@@ -136,7 +136,9 @@ destination — that is how an upstream `mvdsv` wins over the bundled one.
   (default on), `addon-textures` / `addon-fortress` / `addon-clanarena`
   (opt), `linux` (cfg only, never the tarball), `macosx` (cfg; the old
   `.app` only as fallback), upstream ezQuake for the platform, generated
-  `ezquake/configs/preset.cfg`.
+  `ezquake/configs/preset.cfg`, and on Linux/macOS a generated
+  `start_ezquake.sh` (chmods the AppImage / the `.app` binaries, clears
+  macOS's quarantine flag, then launches).
 - Server: `sv-gpl` (minus `addons/*.sh`), `sv-non-gpl`, `sv-configs`,
   `sv-maps-gpl`, `sv-maps` (default on, 610 MB), `sv-bin-x64` or
   `sv-bin-win32`, upstream MVDSV + KTX replacing `mvdsv[.exe]` and
@@ -150,9 +152,17 @@ destination — that is how an upstream `mvdsv` wins over the bundled one.
   TF in that order; QTV TCP 28000; QWFWD UDP 30000.
 - After the run: `nquake-reborn.json` (what was installed, hashes, options
   with passwords blanked) and `README-nquake.txt`; executable bits are set
-  where the surface can (Tauri) — on the web the generated
-  `start_servers.sh` chmods, and the Done step / readme tell Linux and macOS
-  users to `chmod +x` the client.
+  where the surface can (Tauri) — on the web every generated script chmods
+  itself and what it launches, so the Done step / readme say `sh
+  start_ezquake.sh` / `sh start_servers.sh` for the first run there and
+  `./…` where the bits were set.
+- **Names a browser cannot create.** Chromium's File System Access API
+  refuses `.lnk`, `.scf` and `.url` outright (and CLSID extensions, trailing
+  dots, Windows device names) whatever the OS underneath — nQuake ships
+  `ezquake/Online Manual.url`. `domain/paths.ts#browserBlockReason` holds the
+  rule, `Destination.restrictsNames` says whether the surface has it, and
+  `runInstall` drops those items before the run and reports them as
+  `result.blocked` notes rather than failures. Spaces in a name are fine.
 
 Renaming a package or one of the explicitly named paths in distfiles breaks
 this; change both in the same breath.

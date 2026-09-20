@@ -23,10 +23,19 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
   const client = o.target !== "server";
   const server = o.target !== "client";
   const partial = r && !r.ok;
+  // A browser cannot chmod, so `./script.sh` would be "Permission denied" on
+  // the first run; every generated script sets its own bit when run with `sh`.
+  const sh = (script: string) =>
+    folder?.picked.canSetExecutable ? `./${script}` : `sh ${script}`;
   // The firewall ports are already listed in the server table above.
-  const visibleNotes = (plan?.notes ?? []).filter(
-    (n) => !n.startsWith("Open UDP"),
-  );
+  const visibleNotes = [
+    ...(plan?.notes ?? []).filter((n) => !n.startsWith("Open UDP")),
+    // Files this surface is not allowed to name at all — nothing the user did
+    // wrong, and nothing they can retry, so they are notes and not failures.
+    ...(r?.blocked ?? []).map(
+      (b) => `${b.dest} was not installed: ${b.reason}.`,
+    ),
+  ];
 
   const openFolder = async () => {
     if (folder?.picked.kind !== "tauri") return;
@@ -72,18 +81,26 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
             <p className="text-sm">
               In a terminal, from the nQuake folder:
               <code className="mt-2 block rounded-md border border-line bg-page-bg p-2 font-mono text-xs">
-                chmod +x ezQuake-x86_64.AppImage && ./ezQuake-x86_64.AppImage
+                {sh("start_ezquake.sh")}
               </code>
+              <span className="mt-2 block text-xs text-muted">
+                The launcher sets the executable bit on the AppImage and starts
+                it — after the first run <code>./start_ezquake.sh</code> works
+                too.
+              </span>
             </p>
           )}
           {o.platform === "macos" && (
             <p className="text-sm">
-              Open <code>ezQuake.app</code> from the nQuake folder. If macOS
-              refuses the first launch, run once in Terminal:
+              In a terminal, from the nQuake folder:
               <code className="mt-2 block rounded-md border border-line bg-page-bg p-2 font-mono text-xs">
-                xattr -dr com.apple.quarantine ezQuake.app && chmod +x
-                ezQuake.app/Contents/MacOS/*
+                {sh("start_ezquake.sh")}
               </code>
+              <span className="mt-2 block text-xs text-muted">
+                The launcher sets the executable bits, clears the macOS
+                quarantine flag and opens <code>ezQuake.app</code> — after that
+                you can launch it from Finder.
+              </span>
             </p>
           )}
         </div>
@@ -100,9 +117,9 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
               </>
             ) : (
               <>
-                Run <code>./start_servers.sh</code> in the folder — it sets the
-                executable bits and starts each process in a restart loop.{" "}
-                <code>./stop_servers.sh</code> stops them.
+                Run <code>{sh("start_servers.sh")}</code> in the folder — it
+                sets the executable bits and starts each process in a restart
+                loop. <code>{sh("stop_servers.sh")}</code> stops them.
               </>
             )}
           </p>

@@ -10,8 +10,14 @@ export function renderInstallReadme(
   plan: InstallPlan,
   version: string,
   now: Date,
+  /** The desktop app chmods what it writes; a browser cannot. */
+  opts: { executableBitsSet?: boolean } = {},
 ): string {
   const out: string[] = [];
+  // Without the bit, `./script.sh` is "Permission denied" — but `sh script.sh`
+  // works, and every script this installer generates chmods itself first.
+  const run = (script: string) =>
+    opts.executableBitsSet ? `./${script}` : `sh ${script}`;
   const eol = o.platform === "windows" ? "\r\n" : "\n";
   out.push("nQuake — installed by the nQuake web installer");
   out.push("=".repeat(48));
@@ -31,17 +37,22 @@ export function renderInstallReadme(
         "ezquake/configs/preset.cfg and load automatically on first start.",
       );
     } else if (o.platform === "linux") {
-      out.push("Make the client executable once, then run it:");
+      out.push("Start the client from a terminal in this folder:");
+      out.push(`  ${run("start_ezquake.sh")}`);
       out.push(
-        "  chmod +x ezQuake-x86_64.AppImage && ./ezQuake-x86_64.AppImage",
+        "The launcher sets the executable bit on the AppImage and runs it;",
       );
+      out.push("after the first run ./start_ezquake.sh works too.");
     } else {
+      out.push("Start the client from a terminal in this folder:");
+      out.push(`  ${run("start_ezquake.sh")}`);
       out.push(
-        "Run ezQuake.app. If macOS refuses to open it, run once in Terminal:",
+        "The launcher sets the executable bits, clears the macOS quarantine",
       );
       out.push(
-        "  xattr -dr com.apple.quarantine ezQuake.app && chmod +x ezQuake.app/Contents/MacOS/*",
+        "flag and opens ezQuake.app; after the first run you can open the app",
       );
+      out.push("from Finder as usual.");
     }
     if (!o.pak1) {
       out.push("");
@@ -64,9 +75,13 @@ export function renderInstallReadme(
       );
     } else {
       out.push(
-        "Run ./start_servers.sh (it sets the executable bits first); ./stop_servers.sh stops them.",
+        `Run ${run("start_servers.sh")} (it sets the executable bits first); ` +
+          `${run("stop_servers.sh")} stops them.`,
       );
-      out.push("Add it to cron with @reboot to survive restarts.");
+      out.push(
+        "After the first run ./start_servers.sh works too; add that to cron",
+      );
+      out.push("with @reboot to survive restarts.");
     }
     out.push("");
     out.push("Servers:");

@@ -6,6 +6,7 @@
 // downstream re-derives a decision made here.
 
 import {
+  renderClientLaunchScript,
   renderKtxPortCfg,
   renderPresetCfg,
   renderPwdCfg,
@@ -264,6 +265,13 @@ export function buildPlan(
       renderPresetCfg(c.config, platform),
       "config",
     );
+    // Linux and macOS need the executable bit (and macOS the quarantine flag
+    // cleared) before the client will start; a browser can do neither, so the
+    // launcher does it on first run.
+    const launch = renderClientLaunchScript(platform);
+    if (launch) {
+      b.generated(launch.path, launch.text, "config", launch.executable);
+    }
   }
 
   // ---- Server

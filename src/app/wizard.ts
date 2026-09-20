@@ -323,6 +323,7 @@ export function useWizard(caps: Capabilities): WizardCtx {
           result: {
             ok: false,
             failed: [],
+            blocked: [],
             skipped: 0,
             written: 0,
             bytes: 0,

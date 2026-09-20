@@ -144,11 +144,12 @@ Keep both in step with `paths.ts`: if either list grows, so should ours.
   the retry path.
 - **No macOS server binaries exist anywhere** — not in distfiles, not upstream.
   A macOS server install is configs only, with a note saying so.
-- **The desktop app and the browser legitimately differ.** `canSetExecutable`
-  is true only under Tauri; `restrictsNames` is true only in the browser. A
-  report that reproduces on one surface and not the other is usually one of
-  these two flags, and the fix belongs behind the `Destination` seam — never as
-  a branch inside the installer.
+- **The desktop app and the browser legitimately differ, and so do two
+  browsers.** `canSetExecutable` is true only under Tauri; `nameRules` is
+  `"none"` outside the browser and `"browser"` or `"browser-windows"` in it,
+  by the OS the browser runs on. A report that reproduces on one surface and
+  not another is usually one of these two fields, and the fix belongs behind
+  the `Destination` seam — never as a branch inside the installer.
 - **Simulation mode is not a bug.** Phones, Firefox, Safari, non-HTTPS pages
   and `?mock=1` all get the full wizard with simulated downloads, and say so in
   a banner. "It didn't write anything" from a Firefox user is working as
@@ -188,10 +189,10 @@ ezquake/Online Manual.url`, and the reporter guessed it was the spaces.
 3. Chromium source (command above): `.lnk`, `.scf` and `.url` are refused
    outright, on every OS, because a `.url` file can be made to read arbitrary
    files (crbug.com/1307930).
-4. Fix in the pure layer (`domain/paths.ts`), one capability flag on the seam
-   (`Destination.restrictsNames`), and `runInstall` drops such items before the
-   run and reports them as notes rather than failures — because a failure the
-   user cannot act on is worse than no failure at all.
+4. Fix in the pure layer (`domain/paths.ts`), one capability field on the seam
+   (`Destination.nameRules`, a boolean back then), and `runInstall` drops such
+   items before the run and reports them as notes rather than failures —
+   because a failure the user cannot act on is worse than no failure at all.
 5. `dry-run.mjs --restricted` reproduced it before the fix and proved it after.
 
 The same shape, one platform deeper, is the `.cfg` bug: a Windows reporter's

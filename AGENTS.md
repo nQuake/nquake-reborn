@@ -114,7 +114,7 @@ browser.
 | --- | --- | --- |
 | `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, client launcher, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `paths.ts` (names a browser cannot create), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
 | `src/net` | `sources.ts` (URLs, index loading, env overrides), `transport.ts` (fetch + retry/backoff; 404 is final), `installer.ts` (`runInstall`: worker pool, progress, failures collected, record + readme + chmod at the end) | domain, platform types |
-| `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam — `canSetExecutable`, `restrictsNames`), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
+| `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam — `canSetExecutable`, `nameRules`), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
 | `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue…), `Stepper.tsx`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
 | `src/app` | `wizard.ts` (state, flow, catalog loading, install run), `App.tsx` (shell, mode switch, nav), `main.tsx`, `theme.ts` | everything |
 | `tests/` | vitest suites mirroring `src/`; `tests/fixtures/upstream.json` | |

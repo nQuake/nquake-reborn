@@ -18,22 +18,30 @@ The installer is three pure things and two impure ones.
   `start_ezquake.sh` client launcher and the start/stop scripts per platform.
   Every generated shell script chmods itself and what it launches, because a
   browser cannot set the executable bit.
-- **Paths** (`src/domain/paths.ts`) — the names a browser install can never
-  create. Chromium's File System Access API rejects `.lnk`, `.scf` and `.url`
-  on every OS, and nQuake ships `ezquake/Online Manual.url`.
+- **Paths** (`src/domain/paths.ts`) — the names a browser install cannot
+  create, and what to do about them. Chromium's File System Access API
+  rejects `.lnk`, `.scf` and `.url` on every OS (nQuake ships
+  `ezquake/Online Manual.url`), and on Windows it also rejects every
+  extension Safe Browsing marks dangerous there — `cfg`, `dll`, `ini`,
+  `manifest`, i.e. every config nQuake ships. `resolveName` decides per
+  surface: write it, park it under a `.nqinstall` name for the generated
+  `nquake-finish.bat` to rename, or drop it.
 
 ## Impure
 
 - **Destination** (`src/platform/destination.ts`) — the folder. Three
   implementations: File System Access (browser), Tauri (desktop app), mock
-  (simulation). Two capability flags say what a surface can do:
-  `canSetExecutable` (only Tauri) and `restrictsNames` (only the browser).
+  (simulation). Two capability fields say what a surface can do:
+  `canSetExecutable` (only Tauri) and `nameRules` (`"none"` outside the
+  browser, `"browser"` or `"browser-windows"` in it, by the host OS).
 - **Installer** (`src/net/installer.ts`) — a worker pool that walks the plan
   through a `Transport` into a `Destination`, largest files first, reporting
   progress, keeping unchanged files (`install-state.ts`), collecting
   failures, and finishing with `nquake-reborn.json` and `README-nquake.txt`.
-  Items the surface cannot name are dropped before the run and reported as
-  `result.blocked` notes, not failures — retrying could never fix them.
+  Items the surface cannot name are either parked under a `.nqinstall` name
+  (`result.sidecars`, with `nquake-finish.bat` written at the end to rename
+  them) or dropped before the run and reported as `result.blocked` notes —
+  never failures, since retrying could not fix them.
 
 ## Data sources
 

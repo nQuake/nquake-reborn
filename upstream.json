@@ -1,0 +1,121 @@
+{
+ "schema": 1,
+ "generated": "2026-09-20T15:42:50.973Z",
+ "components": {
+  "ezquake": {
+   "version": "3.6.9",
+   "publishedAt": "2026-03-01T19:45:47Z",
+   "targets": {
+    "windows-x64": {
+     "asset": "ezQuake-windows-x64.zip",
+     "bytes": 10136576,
+     "files": [
+      {
+       "path": "ezquake.exe",
+       "size": 10136576,
+       "sha256": "1b4896a54a2a5c4f91cf64ae6e00d2264f37097ba6a06de150f218a4ee004318"
+      }
+     ]
+    },
+    "linux-x86_64": {
+     "asset": "ezQuake-linux-x86_64.zip",
+     "bytes": 22784504,
+     "files": [
+      {
+       "path": "ezQuake-x86_64.AppImage",
+       "size": 22784504,
+       "sha256": "87c9af14c68feb018e64f580a9112ddfcdf24f7fe6e2d7833525621bf6d7a04e"
+      }
+     ]
+    },
+    "macos-universal": {
+     "asset": "ezQuake-macOS-universal.zip",
+     "bytes": 21051170,
+     "files": [
+      {
+       "path": "ezQuake.app/Contents/Info.plist",
+       "size": 2219,
+       "sha256": "0600a1a09231ec9168fba74821af9c3ba8b6d1d97165c2ac566b4438c60deaf7"
+      },
+      {
+       "path": "ezQuake.app/Contents/MacOS/ezQuake",
+       "size": 20997856,
+       "sha256": "14633b5d4201e9460250ad236fde2e4ad579a6ddbaf81301830099d8cf004f33"
+      },
+      {
+       "path": "ezQuake.app/Contents/PkgInfo",
+       "size": 8,
+       "sha256": "82502191c9484b04d685374f9879a0066069c49b8acae7a04b01d38d07e8eca0"
+      },
+      {
+       "path": "ezQuake.app/Contents/Resources/ezquake.icns",
+       "size": 48641,
+       "sha256": "929f7813d2fc1b4f30cc8bfe9224242e2ebf003ddd804626dbfa66c936226e69"
+      },
+      {
+       "path": "ezQuake.app/Contents/_CodeSignature/CodeResources",
+       "size": 2446,
+       "sha256": "a696d8b764e4c61aa6269b1dd931dab4e408786aa6c1fc25890dd56c942fd87d"
+      }
+     ]
+    }
+   }
+  },
+  "mvdsv": {
+   "version": "1.11",
+   "publishedAt": "2025-02-27T18:57:33Z",
+   "targets": {
+    "windows-x64": {
+     "asset": "mvdsv_windows_x64.exe",
+     "bytes": 1153294,
+     "files": [
+      {
+       "path": "mvdsv.exe",
+       "size": 1153294,
+       "sha256": "a615c693ddfd7e6bdfad2c2a0bd017396b8f72eda7993394e1d80872d0bd9365"
+      }
+     ]
+    },
+    "linux-amd64": {
+     "asset": "mvdsv_linux_amd64",
+     "bytes": 718312,
+     "files": [
+      {
+       "path": "mvdsv",
+       "size": 718312,
+       "sha256": "6227295a2e636182e819e63fbd61231252157cda6206eb19e1376bd3e6d10f16"
+      }
+     ]
+    }
+   }
+  },
+  "ktx": {
+   "version": "1.47",
+   "publishedAt": "2026-05-16T18:41:12Z",
+   "targets": {
+    "windows-x64": {
+     "asset": "qwprogs-windows-x64.zip",
+     "bytes": 1777002,
+     "files": [
+      {
+       "path": "ktx/qwprogs.dll",
+       "size": 1777002,
+       "sha256": "d12028044e02a2e537f72821ab00c9a316a1a89538b43e100695291ffa5c61e1"
+      }
+     ]
+    },
+    "linux-amd64": {
+     "asset": "qwprogs-linux-amd64.zip",
+     "bytes": 1481792,
+     "files": [
+      {
+       "path": "ktx/qwprogs.so",
+       "size": 1481792,
+       "sha256": "d4124d362e74a746c4bf82dc88e70d26a03b124dc91791190f5c7e37da11db63"
+      }
+     ]
+    }
+   }
+  }
+ }
+}

@@ -297,8 +297,13 @@ Conventional Commits; PRs squash-merge, so the PR title is the commit.
 - **Verified:** unit tests, build, `cargo check`, the full screenshot
   matrix, and — after merge — the live site loading the distfiles catalog
   and the upstream mirror through CORS in a real Chromium session.
-- **Not yet exercised end to end:** a real install through the Tauri app and
-  the Release workflow's desktop bundles. Treat the first bug report from
+- **Not yet exercised end to end:** a real install through the Tauri app. The
+  Release workflow's first run (v0.2.0) built only the Linux bundle: Windows
+  died on `VITE_TARGET=tauri vite build` (cmd.exe has no such syntax — the
+  mode is now `vite build --mode tauri`) and both macOS jobs died on
+  `security import`, because the bundler code-signs whenever
+  `APPLE_CERTIFICATE` *exists* and the workflow passed it an empty string.
+  Both are fixed but unproven; the next release is the test. Treat the first bug report from
   either as expected. A real Chromium install into a folder has now been done
   by a user, and found two things the simulation could not: the browser
   refuses to create `ezquake/Online Manual.url` at all, and nothing set the

@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "build:tauri": "VITE_TARGET=tauri vite build",
+    "build:tauri": "vite build --mode tauri",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . && tsc --noEmit",

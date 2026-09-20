@@ -12,8 +12,9 @@ export default [
   },
   js.configs.recommended,
   {
-    // Node tooling scripts (release / changelog automation).
-    files: ["scripts/**/*.mjs"],
+    // Node tooling scripts: release / changelog automation, and the debug
+    // skill's reproduction scripts (`.agents/skills/debug/scripts/`).
+    files: ["scripts/**/*.mjs", ".agents/**/*.mjs"],
     languageOptions: {
       sourceType: "module",
       ecmaVersion: 2022,

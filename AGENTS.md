@@ -100,11 +100,13 @@ suite is fast (vitest, ~40 tests) and covers the plan builder, the config
 generators, the install record, the wizard step flow and the installer run
 against a fake transport and destination.
 
-Handy URL params for development: `?mock=1` (force simulation),
-`?mode=simple|advanced`, `?platform=windows|linux|macos`, `?theme=dark|light`.
-Build-time overrides `VITE_MANIFEST_URL` / `VITE_UPSTREAM_URL` point the two
-index files elsewhere (the screenshot harness uses a local
-`../distfiles/manifest.json` and `tests/fixtures/upstream.json`).
+**Debugging a bug report starts at `.agents/skills/debug/`** (symlinked as
+`.claude/skills/`). It holds the triage table from error string to file, the
+sandbox traps (no GTK for `cargo check`, no network in the headless browser,
+Playwright's pinned browser revision), the dev URL params and build-time index
+overrides, and scripts that build a plan, run a whole install against the mock
+destination or audit the live catalog — in Node, in a second, without a
+browser.
 
 ## Layout and boundaries
 
@@ -280,9 +282,14 @@ Conventional Commits; PRs squash-merge, so the PR title is the commit.
 - **Verified:** unit tests, build, `cargo check`, the full screenshot
   matrix, and — after merge — the live site loading the distfiles catalog
   and the upstream mirror through CORS in a real Chromium session.
-- **Not yet exercised end to end:** a real install into a folder in Chrome
-  or Edge, a real install through the Tauri app, and the Release workflow's
-  desktop bundles. Treat the first bug report from any of those as expected.
+- **Not yet exercised end to end:** a real install through the Tauri app and
+  the Release workflow's desktop bundles. Treat the first bug report from
+  either as expected. A real Chromium install into a folder has now been done
+  by a user, and found two things the simulation could not: the browser
+  refuses to create `ezquake/Online Manual.url` at all, and nothing set the
+  executable bit on the downloaded AppImage. Both are fixed; the shapes are
+  worth remembering, since the mock destination reproduces neither by
+  default.
 - Firefox and Safari have no folder access, so they only get the
   simulation; a "download as zip" fallback (streaming a zip to the browser)
   is the obvious next surface behind the same seam.
@@ -303,4 +310,5 @@ Conventional Commits; PRs squash-merge, so the PR title is the commit.
 | Which distfiles paths the plan names | `nQuake/distfiles/AGENTS.md` (its "Paths are a contract" list) |
 | The manifest or upstream index shape | `src/domain/manifest.ts` / `upstream.ts`, the generators (`distfiles/scripts/build-manifest.mjs`, `scripts/mirror-upstream.mjs`), and the `schema` number |
 | Anything under `tauri/` | `tauri/README.md`, and re-read "The desktop shell is thin" |
+| A layer boundary, a surface capability or a debugging recipe | `.agents/skills/debug/SKILL.md` |
 | Release / deploy flow | "Deploy, release, changelog" above |

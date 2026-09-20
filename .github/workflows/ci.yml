@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # `labeled` / `unlabeled` re-run the changeset job when the
+    # `no-changelog` label is toggled after the PR opened.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: make fmt-check
+      - run: make lint
+      - run: make test
+      - run: make build
+
+  tauri-check:
+    # `tauri/` is outside the npm workspace and the root linter, so without
+    # this nothing would notice the desktop shell failing to compile until a
+    # release tried to package it. `cargo check` needs no bundling and no
+    # frontend build; the placeholder dist keeps `generate_context!` happy.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri/src-tauri
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: mkdir -p dist && echo '<!doctype html>' > dist/index.html
+      - run: cargo check --manifest-path tauri/src-tauri/Cargo.toml
+      - run: cargo fmt --manifest-path tauri/src-tauri/Cargo.toml -- --check
+
+  changeset:
+    # Every PR touching user-visible code drops a changelog fragment under
+    # .changes/unreleased/, or opts out via the `no-changelog` label.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Check for changelog fragment
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: node scripts/release/check-changeset.mjs

@@ -1,0 +1,227 @@
+name: pages
+
+# Deploys the installer to GitHub Pages in up to three slots, all in one
+# artifact (Pages serves one tree per repository):
+#
+#   <base>/          the latest released v* tag (or main, before the first release)
+#   <base>/preview/  the current main
+#   <base>/branch/   an opt-in feature branch, parked via workflow_dispatch
+#
+# <base> is `/<repo-name>/` on the default *.github.io host — for this
+# repository, `/nquake-reborn/` — and `/` when the PAGES_CNAME secret puts a
+# custom domain in front. `vite.config.ts` reads the slot's base from
+# VITE_BASE.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch_ref:
+        description: "Optional branch to park in the stable /branch/ slot. Persists across regular deploys until the next branch_ref dispatch overwrites it."
+        required: false
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      release_ref:
+        description: "Tag or sha to build for the production slot."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Orphan branch holding the most recently dispatched /branch/ build.
+  BRANCH_DEPLOY_REF: branch-deploy
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      # ---- Resolve the base path ----
+      - name: Resolve base path
+        id: base
+        env:
+          PAGES_CNAME: ${{ secrets.PAGES_CNAME }}
+        run: |
+          if [ -n "$PAGES_CNAME" ]; then
+            BASE="/"
+          else
+            BASE="/${GITHUB_REPOSITORY#*/}/"
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "Base path: $BASE"
+
+      # ---- Resolve which tag to serve at the root slot (if any) ----
+      - name: Resolve production tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.release_ref }}" ]; then
+            REF="${{ inputs.release_ref }}"
+          else
+            # Highest semver tag, not the nearest reachable one: a release
+            # cut from an earlier commit is not an ancestor of main.
+            REF=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          fi
+          if [ -n "$REF" ]; then
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+            echo "has_release=true" >> "$GITHUB_OUTPUT"
+            echo "Resolved production ref: $REF"
+          else
+            echo "ref=" >> "$GITHUB_OUTPUT"
+            echo "has_release=false" >> "$GITHUB_OUTPUT"
+            echo "No release tag found — will serve main at the root slot."
+          fi
+
+      - name: Resolve branch dispatch
+        id: dispatch
+        run: |
+          REF="${{ inputs.branch_ref }}"
+          if [ -z "$REF" ]; then
+            echo "has_dispatch=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+            echo "has_dispatch=true" >> "$GITHUB_OUTPUT"
+            echo "Dispatched: $REF -> /branch/"
+          fi
+
+      # ---- Production build (latest tag, root slot) ----
+      - name: Checkout production tag
+        if: steps.tag.outputs.has_release == 'true'
+        run: git checkout ${{ steps.tag.outputs.ref }}
+      - name: Reinstall deps for production tag
+        if: steps.tag.outputs.has_release == 'true'
+        run: npm ci
+      - name: Build production
+        if: steps.tag.outputs.has_release == 'true'
+        run: npm run build
+        env:
+          VITE_BASE: ${{ steps.base.outputs.base }}
+      - name: Stash production dist
+        if: steps.tag.outputs.has_release == 'true'
+        run: mv dist dist-prod
+      - name: Return to triggering ref
+        if: steps.tag.outputs.has_release == 'true'
+        run: git checkout ${{ github.sha }} && npm ci
+
+      # ---- Preview build (current main) ----
+      - name: Build preview
+        run: npm run build
+        env:
+          # Before the first release this build IS the root slot.
+          VITE_BASE: ${{ steps.tag.outputs.has_release == 'true' && format('{0}preview/', steps.base.outputs.base) || steps.base.outputs.base }}
+
+      # ---- Optional /branch/ build + persist to orphan branch ----
+      - name: Stash preview dist
+        if: steps.dispatch.outputs.has_dispatch == 'true'
+        run: mv dist dist-preview
+      - name: Checkout dispatched ref
+        if: steps.dispatch.outputs.has_dispatch == 'true'
+        run: |
+          git fetch origin "${{ steps.dispatch.outputs.ref }}"
+          git checkout "${{ steps.dispatch.outputs.ref }}"
+          npm ci
+      - name: Build /branch/
+        if: steps.dispatch.outputs.has_dispatch == 'true'
+        run: npm run build
+        env:
+          VITE_BASE: ${{ format('{0}branch/', steps.base.outputs.base) }}
+      - name: Persist /branch/ build to orphan branch
+        if: steps.dispatch.outputs.has_dispatch == 'true'
+        run: |
+          mv dist dist-branch
+          STAGE=$(mktemp -d)
+          cp -R dist-branch/. "$STAGE/"
+          cd "$STAGE"
+          git init -q -b "$BRANCH_DEPLOY_REF"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "branch deploy: ${{ steps.dispatch.outputs.ref }} (${{ github.run_id }})"
+          REMOTE_URL=$(git -C "$GITHUB_WORKSPACE" remote get-url origin)
+          AUTH_URL=$(printf '%s' "$REMOTE_URL" | sed "s|https://|https://x-access-token:${{ github.token }}@|")
+          git remote add origin "$AUTH_URL"
+          git push -f origin "HEAD:$BRANCH_DEPLOY_REF"
+          cd "$GITHUB_WORKSPACE"
+      - name: Return to triggering ref after dispatch build
+        if: steps.dispatch.outputs.has_dispatch == 'true'
+        run: |
+          git checkout ${{ github.sha }}
+          mv dist-preview dist
+
+      # ---- Rehydrate /branch/ from the orphan branch (every run) ----
+      - name: Rehydrate /branch/ from orphan branch
+        id: rehydrate
+        run: |
+          if git ls-remote --exit-code --heads origin "$BRANCH_DEPLOY_REF" >/dev/null 2>&1; then
+            git fetch origin "$BRANCH_DEPLOY_REF"
+            mkdir -p dist-branch
+            git --work-tree=dist-branch checkout "origin/$BRANCH_DEPLOY_REF" -- .
+            echo "has_branch_dist=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_branch_dist=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ---- Merge ----
+      - name: Merge builds
+        run: |
+          if [ -d dist-prod ]; then
+            mv dist dist-preview
+            mv dist-prod dist
+            mkdir -p dist/preview
+            cp -R dist-preview/. dist/preview/
+            echo "Merged: root = ${{ steps.tag.outputs.ref }}, /preview/ = ${{ github.sha }}"
+          else
+            echo "No release yet — serving main at the root slot (no /preview/)."
+          fi
+          if [ "${{ steps.rehydrate.outputs.has_branch_dist }}" = "true" ]; then
+            mkdir -p dist/branch
+            cp -R dist-branch/. dist/branch/
+          fi
+          # Pages serves a 404 for unknown paths; the installer has one route,
+          # so a copy of index.html covers deep links with query strings.
+          cp dist/index.html dist/404.html
+
+      # The custom domain is not checked in; PAGES_CNAME supplies it.
+      - name: Write CNAME
+        env:
+          PAGES_CNAME: ${{ secrets.PAGES_CNAME }}
+        run: |
+          if [ -n "$PAGES_CNAME" ]; then
+            printf '%s\n' "$PAGES_CNAME" > dist/CNAME
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

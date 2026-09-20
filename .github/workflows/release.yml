@@ -1,0 +1,236 @@
+name: Release
+
+# Manual-only. Derives the semver bump from the changeset fragments in
+# .changes/unreleased/ (or takes an explicit one), collates them into a new
+# CHANGELOG section, bumps package.json, tags vX.Y.Z, creates a DRAFT GitHub
+# Release, packages the Tauri desktop app for Windows / macOS (Intel and
+# Apple Silicon) / Linux and attaches the bundles, publishes the release
+# once every bundle is up, and chains into pages.yml so the tag is served
+# at the root slot immediately. The web deploy does not wait for the
+# desktop packaging.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump. 'auto' derives it from the .changes/unreleased/ fragments (breaking → major, Added/Changed/Removed/Deprecated → minor, Fixed/Security → patch)."
+        required: true
+        type: choice
+        default: auto
+        options: [auto, patch, minor, major]
+      commit:
+        description: "Optional commit sha or ref to release from. Defaults to main HEAD."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      - name: Verify clean working tree
+        run: |
+          if ! git diff --quiet || ! git diff --quiet --cached; then
+            echo "::error::working tree is not clean — refusing to release"
+            git status
+            exit 1
+          fi
+
+      - name: Check out target commit
+        if: inputs.commit != ''
+        run: |
+          git checkout --detach "${{ inputs.commit }}"
+          npm ci
+
+      - name: Resolve bump
+        id: resolve
+        run: |
+          if [ "${{ inputs.bump }}" = "auto" ] || [ -z "${{ inputs.bump }}" ]; then
+            BUMP=$(node scripts/release/compute-bump.mjs)
+          else
+            BUMP="${{ inputs.bump }}"
+          fi
+          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "Bump: $BUMP"
+
+      - name: Bump version
+        id: bump
+        run: |
+          # Compute from the highest released tag, not package.json, so a
+          # tag-only release from an earlier commit can't regress the base.
+          LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          if [ -n "$LATEST_TAG" ]; then
+            npm version "${LATEST_TAG#v}" --no-git-tag-version --allow-same-version >/dev/null
+          fi
+          NEW=$(npm version ${{ steps.resolve.outputs.bump }} --no-git-tag-version)
+          echo "version=${NEW#v}" >> "$GITHUB_OUTPUT"
+          echo "tag=$NEW" >> "$GITHUB_OUTPUT"
+          echo "Bumped from ${LATEST_TAG:-package.json} to $NEW"
+
+      - name: Collate changelog
+        run: node scripts/release/collate-changelog.mjs "${{ steps.bump.outputs.version }}"
+
+      - name: Extract release-notes body
+        run: |
+          node scripts/release/extract-section.mjs "${{ steps.bump.outputs.version }}" > .release-notes.md
+          cat >> .release-notes.md <<'NOTES'
+
+          ---
+
+          ### Desktop downloads
+
+          The same installer in its own window, for people who would rather not
+          give a browser folder access (or whose browser can't grant it).
+          `aarch64` is Apple Silicon, `x64` is Intel.
+
+          **macOS:** the app is not notarized, so the first launch is refused.
+          Right-click the app and choose **Open**, or go to **System Settings →
+          Privacy & Security** and choose **Open Anyway**.
+
+          **Windows:** SmartScreen may warn about an unknown publisher; choose
+          **More info → Run anyway**.
+          NOTES
+
+      - name: Sanity build
+        run: npm run build
+        env:
+          VITE_BASE: /
+
+      - name: Commit + tag
+        env:
+          TAG: ${{ steps.bump.outputs.tag }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          FROM_COMMIT: ${{ inputs.commit }}
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json CHANGELOG.md .changes/unreleased
+          git commit -m "chore(release): v${VERSION}"
+          git tag -a "$TAG" -m "Release ${TAG}"
+          if [ -z "$FROM_COMMIT" ]; then
+            git push origin HEAD:main
+          else
+            echo "Releasing from ${FROM_COMMIT} — pushing the tag only."
+          fi
+          git push origin "$TAG"
+
+      # A DRAFT until every desktop bundle is attached (the `publish` job).
+      - name: Create GitHub Release (draft)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" --notes-file .release-notes.md
+          else
+            gh release create "$TAG" --draft --title "$TAG" --notes-file .release-notes.md
+          fi
+
+  # The desktop bundles: one runner per target, built from the tag.
+  desktop:
+    needs: release
+    name: desktop (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            args: ""
+          - name: macos-aarch64
+            os: macos-latest
+            args: "--target aarch64-apple-darwin"
+          - name: macos-x64
+            os: macos-latest
+            args: "--target x86_64-apple-darwin"
+          - name: linux-x64
+            os: ubuntu-22.04
+            args: ""
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri/src-tauri
+      - name: Install Linux dependencies
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - run: npm --prefix tauri ci
+      # Builds the web app (beforeBuildCommand → `npm run build:tauri`),
+      # compiles the shell, bundles, and uploads onto the draft release.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional macOS signing/notarization — empty means unsigned.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: tauri
+          tagName: ${{ needs.release.outputs.tag }}
+          releaseId: ""
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  publish:
+    needs: [release, desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          gh release edit "$TAG" --draft=false --latest
+          gh release view "$TAG" --json assets --jq '.assets[] | "published asset: \(.name)"'
+
+  deploy:
+    needs: release
+    uses: ./.github/workflows/pages.yml
+    with:
+      release_ref: ${{ needs.release.outputs.tag }}
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    secrets: inherit

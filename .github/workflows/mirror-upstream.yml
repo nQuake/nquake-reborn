@@ -1,0 +1,76 @@
+name: Mirror upstream binaries
+
+# GitHub release assets are not fetchable from a web page (no CORS), so the
+# installer cannot offer "the latest ezQuake" straight from
+# QW-Group/ezquake-source. This workflow fetches the newest release of each
+# upstream project, extracts the per-platform binaries, and force-pushes
+# them — with an `upstream.json` index — to the orphan `upstream-mirror`
+# branch, which raw.githubusercontent.com serves WITH CORS. The installer
+# reads that index (see src/net/sources.ts) and falls back to the binaries
+# bundled in nQuake/distfiles when it is missing.
+#
+# Layout of the branch:
+#   upstream.json
+#   ezquake/<target>/<files as they land in the install folder>
+#   mvdsv/<target>/mvdsv[.exe]
+#   ktx/<target>/ktx/qwprogs.{so,dll}
+#
+# QTV and QWFWD publish no binaries, so they stay bundled.
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-upstream
+  cancel-in-progress: false
+
+env:
+  MIRROR_REF: upstream-mirror
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: Fetch and extract the latest releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/mirror-upstream.mjs out
+
+      - name: Skip when nothing changed
+        id: diff
+        run: |
+          if git ls-remote --exit-code --heads origin "$MIRROR_REF" >/dev/null 2>&1; then
+            git fetch origin "$MIRROR_REF" --depth=1
+            CUR=$(git show "origin/$MIRROR_REF:upstream.json" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);delete j.generated;console.log(JSON.stringify(j))}catch{console.log("")}})')
+            NEW=$(node -e 'const j=require("./out/upstream.json");delete j.generated;console.log(JSON.stringify(j))')
+            if [ "$CUR" = "$NEW" ]; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              echo "Mirror is already current."
+              exit 0
+            fi
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Force-push the orphan mirror branch
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          cd out
+          git init -q -b "$MIRROR_REF"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "mirror: $(node -e 'const j=require("./upstream.json");console.log(Object.entries(j.components).map(([k,v])=>k+" "+v.version).join(", "))')"
+          REMOTE_URL=$(git -C "$GITHUB_WORKSPACE" remote get-url origin)
+          AUTH_URL=$(printf '%s' "$REMOTE_URL" | sed "s|https://|https://x-access-token:${{ github.token }}@|")
+          git remote add origin "$AUTH_URL"
+          git push -f origin "HEAD:$MIRROR_REF"

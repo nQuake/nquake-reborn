@@ -1,0 +1,9 @@
+dist
+node_modules
+package-lock.json
+**/*.md
+.github
+tauri/src-tauri/target
+tauri/src-tauri/gen
+tauri/src-tauri/icons
+screenshots

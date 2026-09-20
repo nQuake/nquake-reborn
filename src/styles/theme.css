@@ -1,0 +1,236 @@
+/* Design tokens. One slot vocabulary drives the whole UI; the dark and light
+   blocks below remap the colour slots and `<html data-theme>` picks one
+   (`src/app/theme.ts`). Everything structural (radius, fonts) is shared. */
+
+@theme inline {
+  --color-page-bg: var(--page-bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-fg: var(--fg);
+  --color-fg-bright: var(--fg-bright);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-wash: var(--accent-wash);
+  --color-danger: var(--danger);
+  --color-danger-wash: var(--danger-wash);
+  --color-success: var(--success);
+  --color-success-wash: var(--success-wash);
+  --color-warn: var(--warn);
+  --color-warn-wash: var(--warn-wash);
+  --color-link: var(--link);
+
+  /* nquake.com's own stacks: a plain system sans for body copy, Open Sans
+     Condensed for the wordmark and headings, Playball for the slogan. */
+  --font-sans:
+    "Lucida Grande", "Segoe UI", ui-sans-serif, system-ui, -apple-system,
+    Roboto, "Helvetica Neue", Arial, Verdana, sans-serif;
+  --font-display: "Open Sans Condensed", "Arial Narrow", Impact, sans-serif;
+  --font-script: "Playball", "Brush Script MT", cursive;
+  --font-mono:
+    ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.5);
+}
+
+:root {
+  --radius: 10px;
+}
+
+/* Dark — the default and the pre-boot paint. nquake.com's charcoal linen,
+   #959595 body copy, the orange of the logo's "n" and its #FFD930 links. */
+:root,
+:root[data-theme="dark"] {
+  --page-bg: #262626;
+  --surface: #303030;
+  --surface-2: #383838;
+  --surface-3: #444444;
+  --fg: #d2d2d2;
+  --fg-bright: #ffffff;
+  --muted: #959595;
+  --line: #3f3f3f;
+  --line-strong: #5a5a5a;
+  --accent: #f39c12;
+  --accent-fg: #1e1200;
+  --accent-wash: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  --danger: #e2604e;
+  --danger-wash: color-mix(in srgb, var(--danger) 16%, var(--surface));
+  --success: #7cc47f;
+  --success-wash: color-mix(in srgb, var(--success) 16%, var(--surface));
+  --warn: #ffd930;
+  --warn-wash: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  --link: #ffd930;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --page-bg: #ebebeb;
+  --surface: #ffffff;
+  --surface-2: #f5f5f5;
+  --surface-3: #e6e6e6;
+  --fg: #333333;
+  --fg-bright: #111111;
+  --muted: #6b6b6b;
+  --line: #dcdcdc;
+  --line-strong: #bdbdbd;
+  --accent: #e08a00;
+  --accent-fg: #1e1200;
+  --accent-wash: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --danger: #b8402f;
+  --danger-wash: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  --success: #3d8a44;
+  --success-wash: color-mix(in srgb, var(--success) 12%, var(--surface));
+  --warn: #9a6b00;
+  --warn-wash: color-mix(in srgb, #ffd930 22%, var(--surface));
+  --link: #b0640a;
+  color-scheme: light;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* The linen weave of nquake.com's background, drawn in CSS: two hairline
+     grids at 1px offsets over the base colour. Reads as texture, not lines. */
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--fg-bright) 3%, transparent) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--fg-bright) 3%, transparent) 0 1px,
+      transparent 1px 3px
+    ),
+    radial-gradient(
+      900px 500px at 50% -5%,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      transparent 65%
+    );
+  background-attachment: fixed;
+}
+
+/* The nquake.com wordmark, in type: an orange "n" and a silver "Quake",
+   both with the logo's top-to-bottom gradient. */
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 0.9;
+}
+.wordmark .n {
+  background: linear-gradient(180deg, #ffc23a 0%, #f39c12 55%, #d97a00 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.wordmark .quake {
+  background: linear-gradient(180deg, #ffffff 0%, #d9d9d9 60%, #b4b4b4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:root[data-theme="light"] .wordmark .quake {
+  background-image: linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 60%, #111 100%);
+}
+.slogan {
+  font-family: var(--font-script);
+  font-weight: 400;
+}
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.005em;
+}
+
+/* Form controls share one look. */
+.input {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--fg-bright);
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+  outline: none;
+  transition:
+    border-color 120ms,
+    box-shadow 120ms;
+}
+.input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+select.input {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 50%,
+    calc(100% - 11px) 50%;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2rem;
+}
+
+/* Focus ring for buttons / cards. */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Progress shimmer on the active bar. */
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.bar-active {
+  background-image: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    color-mix(in srgb, var(--accent) 70%, white) 50%,
+    var(--accent) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* The screenshot harness sets `data-shot` on <html> so full-page captures
+   show the phone nav where it settles at the end of the page rather than
+   pinned to the bottom of an 844px viewport halfway down the image. */
+html[data-shot] .phone-nav {
+  position: static;
+}

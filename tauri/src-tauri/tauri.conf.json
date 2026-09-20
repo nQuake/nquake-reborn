@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "nQuake",
+  "version": "../../package.json",
+  "identifier": "com.nquake.reborn",
+  "build": {
+    "frontendDist": "../../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm --prefix .. run dev",
+    "beforeBuildCommand": "npm --prefix .. run build:tauri"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "nQuake",
+        "width": 1100,
+        "height": 800,
+        "minWidth": 720,
+        "minHeight": 600,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://raw.githubusercontent.com ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis", "dmg", "appimage", "deb"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Game",
+    "shortDescription": "Install QuakeWorld (nQuake) into a folder you choose.",
+    "longDescription": "The nQuake web installer in its own window: downloads ezQuake, MVDSV, KTX, maps and textures straight into a folder you pick, with nothing else installed on your system."
+  }
+}

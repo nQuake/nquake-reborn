@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "generated": "2026-09-20T00:00:00.000Z",
+  "components": {
+    "ezquake": {
+      "version": "3.6.9",
+      "publishedAt": "2026-03-01T19:45:00Z",
+      "targets": {
+        "windows-x64": {
+          "asset": "ezQuake-windows-x64.zip",
+          "bytes": 9200000,
+          "files": [
+            { "path": "ezquake.exe", "size": 9200000, "sha256": "fixture" }
+          ]
+        },
+        "linux-x86_64": {
+          "asset": "ezQuake-linux-x86_64.zip",
+          "bytes": 22268939,
+          "files": [
+            {
+              "path": "ezQuake-x86_64.AppImage",
+              "size": 22268939,
+              "sha256": "fixture"
+            }
+          ]
+        },
+        "macos-universal": {
+          "asset": "ezQuake-macOS-universal.zip",
+          "bytes": 8500000,
+          "files": [
+            {
+              "path": "ezQuake.app/Contents/MacOS/ezQuake",
+              "size": 8300000,
+              "sha256": "fixture"
+            },
+            {
+              "path": "ezQuake.app/Contents/Info.plist",
+              "size": 2000,
+              "sha256": "fixture"
+            }
+          ]
+        }
+      }
+    },
+    "mvdsv": {
+      "version": "1.11",
+      "publishedAt": "2026-02-27T18:57:00Z",
+      "targets": {
+        "windows-x64": {
+          "asset": "mvdsv_windows_x64.exe",
+          "bytes": 1150000,
+          "files": [
+            { "path": "mvdsv.exe", "size": 1150000, "sha256": "fixture" }
+          ]
+        },
+        "linux-amd64": {
+          "asset": "mvdsv_linux_amd64",
+          "bytes": 717000,
+          "files": [{ "path": "mvdsv", "size": 717000, "sha256": "fixture" }]
+        }
+      }
+    },
+    "ktx": {
+      "version": "1.47",
+      "publishedAt": "2026-05-16T18:41:00Z",
+      "targets": {
+        "windows-x64": {
+          "asset": "qwprogs-windows-x64.zip",
+          "bytes": 1800000,
+          "files": [
+            { "path": "ktx/qwprogs.dll", "size": 1800000, "sha256": "fixture" }
+          ]
+        },
+        "linux-amd64": {
+          "asset": "qwprogs-linux-amd64.zip",
+          "bytes": 1500000,
+          "files": [
+            { "path": "ktx/qwprogs.so", "size": 1500000, "sha256": "fixture" }
+          ]
+        }
+      }
+    }
+  }
+}

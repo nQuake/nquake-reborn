@@ -1,0 +1,8 @@
+/* App-wide stylesheet entry, imported once from `src/app/main.tsx`.
+   Tailwind first so its `@theme` infrastructure is in scope for theme.css.
+   The two display faces nquake.com uses are self-hosted (latin subsets only)
+   so the installer never fetches a font from a CDN. */
+@import "tailwindcss";
+@import "@fontsource/open-sans-condensed/700.css";
+@import "@fontsource/playball/400.css";
+@import "./styles/theme.css";

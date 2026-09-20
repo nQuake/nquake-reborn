@@ -44,7 +44,7 @@ export async function revealInFileManager(
 export class TauriDestination implements Destination {
   readonly kind = "tauri";
   readonly canSetExecutable = true;
-  readonly restrictsNames = false;
+  readonly nameRules = "none" as const;
 
   constructor(readonly root: string) {}
 

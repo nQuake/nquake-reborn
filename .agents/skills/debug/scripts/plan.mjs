@@ -42,7 +42,7 @@ try {
   for (const i of items) {
     const marks = [
       i.executable ? "+x" : null,
-      browserBlockReason(i.dest) ? "NO-BROWSER" : null,
+      browserBlockReason(i.dest, "browser-windows") ? "NO-BROWSER" : null,
     ].filter(Boolean);
     const from = a.source
       ? `  ← ${i.source.kind}${i.source.pkg ? `:${i.source.pkg}` : ""}`

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyPlaceholders,
   renderClientLaunchScript,
+  renderFixupScript,
   renderKtxPortCfg,
   renderPresetCfg,
   renderPwdCfg,
@@ -121,6 +122,11 @@ describe("renderStartScripts", () => {
     );
     expect(start?.text).toContain("-game fortress");
     expect(start?.text).toContain("qtv.exe");
+    // A browser install on Windows cannot name qwprogs.dll or any port cfg;
+    // starting the servers runs the fixup first so the user never has to.
+    expect(start?.text).toContain(
+      'if exist "%~dp0nquake-finish.bat" call "%~dp0nquake-finish.bat" /quiet',
+    );
     expect(files.some((f) => f.path === "start_ktx1_27500.bat")).toBe(true);
     expect(files.every((f) => !f.executable)).toBe(true);
   });
@@ -165,5 +171,53 @@ describe("renderClientLaunchScript", () => {
 
   it("writes nothing on Windows, where the bit does not exist", () => {
     expect(renderClientLaunchScript("windows")).toBeNull();
+  });
+});
+
+describe("renderFixupScript", () => {
+  const renames = [
+    { from: "qw/autoexec.cfg.nqinstall", to: "qw/autoexec.cfg" },
+    { from: "ktx/qwprogs.dll.nqinstall", to: "ktx/qwprogs.dll" },
+  ];
+
+  it("moves every parked file back under its real name", () => {
+    const script = renderFixupScript(renames);
+    expect(script.path).toBe("nquake-finish.bat");
+    expect(script.text).toContain("\r\n");
+    expect(script.text).toContain('cd /d "%~dp0"');
+    expect(script.text).toContain(
+      'if exist "qw\\autoexec.cfg.nqinstall" move /y "qw\\autoexec.cfg.nqinstall" "qw\\autoexec.cfg" >nul',
+    );
+    expect(script.text).toContain(
+      'if exist "ktx\\qwprogs.dll.nqinstall" move /y "ktx\\qwprogs.dll.nqinstall" "ktx\\qwprogs.dll" >nul',
+    );
+    // Every step is guarded, so running it twice is harmless.
+    expect(
+      script.text.split("\r\n").filter((l) => l.startsWith("move ")),
+    ).toEqual([]);
+    expect(script.text).toContain("pause");
+  });
+
+  it("moves a played-in config.cfg aside before overwriting it", () => {
+    const script = renderFixupScript(
+      [
+        {
+          from: "ezquake/configs/config.cfg.nqinstall",
+          to: "ezquake/configs/config.cfg",
+        },
+      ],
+      { path: "ezquake/configs/config.cfg", to: "config-20260920-1200.cfg" },
+    );
+    const ren = script.text.indexOf(
+      'ren "ezquake\\configs\\config.cfg" "config-20260920-1200.cfg"',
+    );
+    expect(ren).toBeGreaterThan(-1);
+    expect(script.text.indexOf("move /y")).toBeGreaterThan(ren);
+  });
+
+  it("stays quiet when a start script calls it", () => {
+    expect(renderFixupScript(renames).text).toContain(
+      'if /i "%~1"=="/quiet" exit /b 0',
+    );
   });
 });

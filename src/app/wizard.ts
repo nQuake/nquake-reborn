@@ -37,6 +37,7 @@ import {
   type Destination,
   type FolderSummary,
 } from "../platform/destination.ts";
+import type { NameRules } from "../domain/paths.ts";
 import { MockDestination, createMockTransport } from "../platform/mock.ts";
 import type { StepInfo } from "../ui/Stepper.tsx";
 
@@ -142,22 +143,34 @@ function readQuery(): {
   platform: Platform | null;
   theme: string | null;
   mode: WizardMode | null;
+  names: NameRules | null;
 } {
   const q = new URLSearchParams(window.location.search);
   const p = q.get("platform");
   const m = q.get("mode");
+  const n = q.get("names");
   return {
     mock: q.get("mock") === "1" || q.get("mock") === "true",
     platform: p === "windows" || p === "linux" || p === "macos" ? p : null,
     theme: q.get("theme"),
     mode: m === "simple" || m === "advanced" ? m : null,
+    // `?names=browser-windows` makes the simulation refuse what a browser on
+    // Windows refuses — the only way to see that install without one.
+    names:
+      n === "browser" || n === "browser-windows" || n === "none" ? n : null,
   };
 }
 
 export const QUERY =
   typeof window !== "undefined"
     ? readQuery()
-    : { mock: false, platform: null, theme: null, mode: null };
+    : {
+        mock: false,
+        platform: null,
+        theme: null,
+        mode: null,
+        names: null,
+      };
 
 export function useWizard(caps: Capabilities): WizardCtx {
   const initialPlatform = QUERY.platform ?? caps.platform ?? "windows";
@@ -324,6 +337,8 @@ export function useWizard(caps: Capabilities): WizardCtx {
             ok: false,
             failed: [],
             blocked: [],
+            sidecars: [],
+            fixupScript: null,
             skipped: 0,
             written: 0,
             bytes: 0,
@@ -382,7 +397,7 @@ export function useWizard(caps: Capabilities): WizardCtx {
 
 /** A simulated folder for mock mode. */
 export function mockDestination(): Destination {
-  return new MockDestination();
+  return new MockDestination(undefined, QUERY.names ?? "none");
 }
 
 /** Whether the current step's answers are complete enough to move on. */

@@ -70,7 +70,7 @@ try {
   console.log("\nNames a browser cannot create (domain/paths.ts)");
   let blocked = 0;
   for (const { item, combos: where } of seen.values()) {
-    const reason = browserBlockReason(item.dest);
+    const reason = browserBlockReason(item.dest, "browser-windows");
     if (!reason) continue;
     blocked++;
     // Known and handled: the installer drops these and says so. A *new* one

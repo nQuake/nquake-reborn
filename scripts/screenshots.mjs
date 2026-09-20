@@ -43,6 +43,10 @@ const wantViewport = arg("viewport", "all");
 const wantTheme = arg("theme", "all");
 const platform = arg("platform", "windows");
 const urlArg = arg("url", "");
+// `--names browser-windows` makes the simulated folder refuse what a browser
+// on Windows refuses, which is the only way to shoot the finish-the-install
+// screen without a Windows machine.
+const names = arg("names", "");
 const manifestPath = arg(
   "manifest",
   resolve(root, "../distfiles/manifest.json"),
@@ -244,7 +248,9 @@ async function shoot(browser, baseUrl, scenario, viewportName, theme) {
     colorScheme: theme,
   });
   const page = await context.newPage();
-  const url = `${baseUrl}?mock=1&theme=${theme}&platform=${platform}`;
+  const url =
+    `${baseUrl}?mock=1&theme=${theme}&platform=${platform}` +
+    (names ? `&names=${names}` : "");
   await page.goto(url, { waitUntil: "networkidle" });
   // See `html[data-shot]` in src/styles/theme.css.
   await page.evaluate(

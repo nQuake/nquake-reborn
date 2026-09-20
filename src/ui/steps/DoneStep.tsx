@@ -1,5 +1,6 @@
 import type { WizardCtx } from "../../app/wizard.ts";
 import { formatBytes, formatDuration } from "../../domain/format.ts";
+import { SIDECAR_SUFFIX } from "../../domain/paths.ts";
 import { ExternalIcon } from "../icons.tsx";
 import {
   Button,
@@ -67,14 +68,38 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
         </Callout>
       )}
 
+      {r?.fixupScript && (
+        <Callout tone="warn" title="One last step — finish the install">
+          <p>
+            Chrome and Edge are not allowed to create <code>.cfg</code> or{" "}
+            <code>.dll</code> files on Windows, so {r.sidecars.length} of them
+            were written with a <code>{SIDECAR_SUFFIX}</code> suffix instead.
+            Open your nQuake folder and double-click{" "}
+            <code>{r.fixupScript}</code> once to put them under their real names
+            — it is a plain text file, so you can read it first.
+          </p>
+          <p className="mt-2 text-xs text-muted">
+            The desktop app writes these files directly and needs no such step.
+          </p>
+        </Callout>
+      )}
+
       {client && (
         <div>
           <SectionTitle>Play</SectionTitle>
           {o.platform === "windows" && (
             <p className="text-sm">
-              Open your nQuake folder and run <code>ezquake.exe</code>. Your
-              nickname and keys are already set; press <kbd>~</kbd> for the
-              console and type <code>/serverbrowser</code> to find a game.
+              Open your nQuake folder and run{" "}
+              {r?.fixupScript ? (
+                <>
+                  <code>{r.fixupScript}</code> first, then{" "}
+                  <code>ezquake.exe</code>
+                </>
+              ) : (
+                <code>ezquake.exe</code>
+              )}
+              . Your nickname and keys are already set; press <kbd>~</kbd> for
+              the console and type <code>/serverbrowser</code> to find a game.
             </p>
           )}
           {o.platform === "linux" && (
@@ -111,6 +136,7 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
               <>
                 Double-click <code>start_servers.bat</code>.{" "}
                 <code>stop_servers.bat</code> stops everything.
+                {r?.fixupScript && " It runs the finish script above for you."}
               </>
             ) : (
               <>

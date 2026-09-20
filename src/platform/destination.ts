@@ -2,6 +2,8 @@
 // interface; `fs-access.ts` (browser), `tauri.ts` (desktop app) and
 // `mock.ts` (simulation) implement it.
 
+import type { NameRules } from "../domain/paths.ts";
+
 export interface DestinationEntry {
   name: string;
   kind: "file" | "directory";
@@ -25,10 +27,11 @@ export interface Destination {
   /** Whether `setExecutable` actually does anything here. */
   readonly canSetExecutable: boolean;
   /**
-   * Whether this surface refuses some file names outright — the browser's
-   * file system API does (see `domain/paths.ts`); the OS-backed ones do not.
+   * Which file names this surface refuses. The browser's file system API
+   * refuses some outright, and the set depends on the OS it runs on (see
+   * `domain/paths.ts`); the OS-backed ones refuse nothing.
    */
-  readonly restrictsNames: boolean;
+  readonly nameRules: NameRules;
 }
 
 export function splitPath(path: string): { dirs: string[]; name: string } {

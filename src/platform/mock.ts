@@ -3,6 +3,7 @@
 // the network. Used on phones, in browsers without the File System Access
 // API, and by the screenshot harness (`?mock=1`).
 
+import type { NameRules } from "../domain/paths.ts";
 import type { Destination, DestinationEntry } from "./destination.ts";
 import type { Transport } from "../net/transport.ts";
 
@@ -14,7 +15,7 @@ export class MockDestination implements Destination {
   constructor(
     readonly name = "nQuake (simulated)",
     /** The simulation pretends to be a surface with no name restrictions. */
-    readonly restrictsNames = false,
+    readonly nameRules: NameRules = "none",
   ) {}
 
   async stat(path: string) {

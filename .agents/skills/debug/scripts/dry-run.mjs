@@ -13,7 +13,9 @@
 //   node .agents/skills/debug/scripts/dry-run.mjs --cat start_ezquake.sh
 //   node .agents/skills/debug/scripts/dry-run.mjs --fail "\.pk3$"     # force failures
 //
-//   --restricted   refuse names the File System Access API refuses
+//   --restricted   refuse names the File System Access API refuses. Defaults
+//                  to a browser on Windows (the strictest: no .cfg, no .dll);
+//                  --restricted=browser for one on Linux/macOS.
 //   --cat RE       print the contents of every generated text file matching RE
 //   --fail RE      make the transport fail for sources matching RE
 //   --tree         list every written path
@@ -50,7 +52,12 @@ try {
     },
   };
 
-  const dest = new MockDestination("dry-run", Boolean(a.restricted));
+  const rules = !a.restricted
+    ? "none"
+    : a.restricted === true
+      ? "browser-windows"
+      : String(a.restricted);
+  const dest = new MockDestination("dry-run", rules);
   const logs = [];
   const result = await runInstall({
     plan,
@@ -65,11 +72,18 @@ try {
 
   console.log(
     `${o.target} / ${o.platform}` +
-      (a.restricted ? " · browser-style name rules" : "") +
+      (a.restricted ? ` · name rules: ${rules}` : "") +
       `\n  ok=${result.ok}  written=${result.written}  skipped=${result.skipped}` +
       `  failed=${result.failed.length}  blocked=${result.blocked.length}` +
       `  ${bytes(result.bytes)}`,
   );
+
+  if (result.fixupScript) {
+    console.log(
+      `\n  ${result.sidecars.length} file(s) parked under a .nqinstall name;` +
+        ` ${result.fixupScript} puts them back.`,
+    );
+  }
 
   if (result.blocked.length) {
     console.log("\nBLOCKED (dropped before the run, reported as notes)");
@@ -97,12 +111,18 @@ try {
     // Generated text is where most "the config is wrong" reports land, and
     // it never touches the network — read it here rather than installing.
     const re = new RegExp(a.cat, "i");
+    const parked = new Map(result.sidecars.map((s) => [s.to, s.from]));
     for (const item of plan.items.filter((i) => re.test(i.dest))) {
-      const text = await dest.readText(item.dest);
+      const path = parked.get(item.dest) ?? item.dest;
+      const text = await dest.readText(path);
       console.log(`\n===== ${item.dest} =====`);
       console.log(text ?? "(not a text file the mock kept)");
     }
-    for (const name of ["README-nquake.txt", "nquake-reborn.json"]) {
+    for (const name of [
+      "README-nquake.txt",
+      "nquake-reborn.json",
+      ...(result.fixupScript ? [result.fixupScript] : []),
+    ]) {
       if (!re.test(name)) continue;
       console.log(`\n===== ${name} =====`);
       console.log(await dest.readText(name));

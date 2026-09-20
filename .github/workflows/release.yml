@@ -189,18 +189,45 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - run: npm ci
       - run: npm --prefix tauri ci
-      # Builds the web app (beforeBuildCommand → `npm run build:tauri`),
-      # compiles the shell, bundles, and uploads onto the draft release.
-      - uses: tauri-apps/tauri-action@v0
+
+      # macOS signing is optional, but the bundler decides whether to sign by
+      # asking whether APPLE_CERTIFICATE *exists* — an empty string counts, and
+      # it then fails the whole bundle on `security import`. So the APPLE_*
+      # variables are exported here only when the secrets are actually set;
+      # without them the bundle is simply unsigned.
+      - name: Export macOS signing secrets
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional macOS signing/notarization — empty means unsigned.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_CERTIFICATE_PASSWORD" ]; then
+            echo "No APPLE_CERTIFICATE secret — building an unsigned bundle."
+            exit 0
+          fi
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD \
+                      APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            value="${!name}"
+            [ -n "$value" ] || continue
+            delim="EOF_$(openssl rand -hex 16)"
+            {
+              echo "${name}<<${delim}"
+              echo "$value"
+              echo "$delim"
+            } >> "$GITHUB_ENV"
+          done
+          echo "macOS signing enabled."
+
+      # Builds the web app (beforeBuildCommand → `npm run build:tauri`),
+      # compiles the shell, bundles, and uploads onto the draft release.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: tauri
           tagName: ${{ needs.release.outputs.tag }}

@@ -78,6 +78,12 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
             <code>{r.fixupScript}</code> once to put them under their real names
             — it is a plain text file, so you can read it first.
           </p>
+          <code className="mt-2 block rounded-md border border-line bg-page-bg p-2 font-mono text-xs">
+            cd /d &quot;C:\path\to\
+            {(caps.realInstall && folder?.picked.name) || "nquake"}&quot;
+            <br />
+            {r.fixupScript}
+          </code>
           <p className="mt-2 text-xs text-muted">
             The desktop app writes these files directly and needs no such step.
           </p>

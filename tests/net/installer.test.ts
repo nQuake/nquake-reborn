@@ -259,9 +259,12 @@ describe("runInstall", () => {
       bat.indexOf("config.cfg.nqinstall"),
     );
     expect(logs.some((m) => m.includes("nquake-finish.bat"))).toBe(true);
-    expect(await dest.readText("README-nquake.txt")).toContain(
-      "FIRST: FINISH THE INSTALL",
-    );
+    const readme = (await dest.readText("README-nquake.txt"))!;
+    expect(readme).toContain("FIRST: FINISH THE INSTALL");
+    // The command-prompt form, so it can be pasted rather than double-clicked.
+    // A browser only learns the folder's name, never its path.
+    expect(readme).toContain('cd /d "C:\\path\\to\\browser"');
+    expect(readme).toContain("  nquake-finish.bat");
 
     // The same plan on a surface that writes through the OS is unchanged.
     const plain = new MockDestination();

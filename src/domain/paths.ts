@@ -46,6 +46,8 @@
 // `ezquake/Online Manual.url` — a bookmark to the ezQuake manual, which the
 // readme links anyway — so browser installs simply leave it out and say so.
 
+import type { InstallSide } from "./plan.ts";
+
 /** Which name rules a destination enforces. `domain` decides what they mean. */
 export type NameRules = "none" | "browser" | "browser-windows";
 
@@ -70,16 +72,17 @@ export const CONFIG_PK3 = "id1/configs.pk3";
 const CORE_GAMEDIRS = ["id1/", "ezquake/", "qw/"];
 
 /**
- * Client mod dirs, each of which gets its own `configs.pk3` rather than
- * sharing the one in `id1`: strip `prox/` from `prox/configs/config.cfg` and
- * it collides with `ezquake/configs/config.cfg`. A pack beside the mod's own
- * `pak0.pak` / `prox.pk3` has exactly the precedence the loose file it
- * replaces had, and is only in the search path under `-game`.
+ * Mod dirs, each of which gets its own `configs.pk3` rather than sharing the
+ * one in `id1`: strip `prox/` from `prox/configs/config.cfg` and it collides
+ * with `ezquake/configs/config.cfg`. A pack beside the mod's own `pak0.pak` /
+ * `prox.pk3` has exactly the precedence the loose file it replaces had, and
+ * is only in the search path under `-game`.
  *
- * This is an allow-list on purpose. A client dir missing from it costs a
- * repair step; a *server* dir wrongly on it would pack configs into something
- * that cannot read them — MVDSV has no zip support at all — so the failure
- * modes are not symmetric and the safe default is to leave a dir out.
+ * The *side* decides whether any of this applies, not the directory — a path
+ * cannot tell you. `fortress/` holds both a client config (`addon-fortress`)
+ * and the TF server's (`sv-fortress`); packing the server's into a pk3 would
+ * hide it from MVDSV, which reads `.pak` but no zip at all. So only items the
+ * plan marked `client` are ever packed, and this list just says where.
  */
 const MOD_GAMEDIRS = ["fortress/", "prox/", "arena/", "cace/"];
 
@@ -153,11 +156,14 @@ export function realPath(path: string): string {
 /**
  * Which archive a config belongs in and where inside it, or null when it
  * cannot be packed — ezQuake only reads `.cfg` files out of a pack through
- * the VFS, and only for game dirs it actually searches.
+ * the VFS, only for game dirs it actually searches, and only the client runs
+ * ezQuake at all.
  */
 export function archiveFor(
   dest: string,
+  side: InstallSide = "client",
 ): { archive: string; entry: string } | null {
+  if (side !== "client") return null;
   if (!dest.toLowerCase().endsWith(".cfg")) return null;
   for (const dir of CORE_GAMEDIRS) {
     if (dest.startsWith(dir)) {
@@ -195,19 +201,23 @@ export type NameResolution =
  * ezQuake can read, else parked for the fixup script a server install runs
  * anyway, else left out with a note.
  */
-export function resolveName(dest: string, rules: NameRules): NameResolution {
+export function resolveName(
+  dest: string,
+  rules: NameRules,
+  side: InstallSide = "client",
+): NameResolution {
   const reason = browserBlockReason(dest, rules);
   if (!reason) return { kind: "write", path: dest };
 
   // Nothing reads a shortcut, so never make a repair step out of one.
   if (isShortcut(dest)) return { kind: "drop", reason };
 
-  const packed = archiveFor(dest);
+  const packed = archiveFor(dest, side);
   if (packed) return { kind: "archive", ...packed, reason };
 
-  const side = sidecarPath(dest);
-  if (rules === "browser-windows" && !browserBlockReason(side, rules)) {
-    return { kind: "sidecar", path: side, reason };
+  const parked = sidecarPath(dest);
+  if (rules === "browser-windows" && !browserBlockReason(parked, rules)) {
+    return { kind: "sidecar", path: parked, reason };
   }
   return { kind: "drop", reason };
 }

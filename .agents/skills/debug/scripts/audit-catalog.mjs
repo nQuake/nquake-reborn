@@ -26,7 +26,9 @@ const say = (kind, msg) => {
 try {
   const { manifest, upstream } = await loadCatalog(src, a);
   const { buildPlan } = await src.load("/src/domain/plan.ts");
-  const { browserBlockReason } = await src.load("/src/domain/paths.ts");
+  const { archiveFor, browserBlockReason } = await src.load(
+    "/src/domain/paths.ts",
+  );
 
   console.log(
     `manifest: ${Object.keys(manifest.packages).length} packages @ ${manifest.commit ?? "?"}\n` +
@@ -78,6 +80,45 @@ try {
     say("note", `${item.dest} — ${reason} (${where.length} option sets)`);
   }
   if (!blocked) say("note", "none");
+
+  // A client config outside archiveFor's game dirs cannot be packed, so it
+  // falls back to the repair script and a Windows client install stops being
+  // one-click. That is a distfiles change adding a game dir the allow-list in
+  // domain/paths.ts has not been told about — one line fixes it.
+  console.log("\nClient configs that would fall out of the pk3");
+  let unpackable = 0;
+  for (const { item, combos: where } of seen.values()) {
+    if (item.side !== "client") continue;
+    if (!browserBlockReason(item.dest, "browser-windows")) continue;
+    if (archiveFor(item.dest, item.side)) continue;
+    if (!item.dest.toLowerCase().endsWith(".cfg")) continue;
+    unpackable++;
+    say(
+      "bad",
+      `${item.dest} is a client config in a game dir MOD_GAMEDIRS does not list` +
+        ` — a Windows web install would need nquake-finish.bat again` +
+        ` (${where.length} option sets)`,
+    );
+  }
+  if (!unpackable) say("ok", "every client config maps into an archive");
+
+  // Two configs that strip to the same entry inside one archive: the
+  // installer keeps the later one and warns, but distfiles should not be
+  // creating the ambiguity in the first place.
+  const entries = new Map();
+  for (const { item } of seen.values()) {
+    const packed = archiveFor(item.dest, item.side);
+    if (!packed) continue;
+    const key = `${packed.archive}#${packed.entry}`;
+    if (!entries.has(key)) entries.set(key, []);
+    entries.get(key).push(item.dest);
+  }
+  const clashes = [...entries].filter(([, list]) => list.length > 1);
+  console.log("\nArchive entry collisions");
+  for (const [key, list] of clashes) {
+    say("bad", `${key} is claimed by ${list.join(" and ")}`);
+  }
+  if (!clashes.length) say("ok", "no two configs claim the same entry");
 
   console.log("\nFiles too big for raw.githubusercontent.com");
   let big = 0;

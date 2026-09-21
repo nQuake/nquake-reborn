@@ -96,6 +96,7 @@ function readZip(bytes: Uint8Array): Map<string, Uint8Array> {
     const localNameLen = view.getUint16(local + 26, true);
     const localExtraLen = view.getUint16(local + 28, true);
     const from = local + 30 + localNameLen + localExtraLen;
+    if (out.has(name)) throw new Error(`duplicate entry: ${name}`);
     out.set(name, bytes.subarray(from, from + size));
     at += 46 + nameLen + extraLen + commentLen;
   }
@@ -322,6 +323,48 @@ describe("runInstall", () => {
     expect(await plain.stat("qw/autoexec.cfg")).not.toBeNull();
     expect(await plain.stat("id1/configs.pk3")).toBeNull();
     expect(await plain.stat("ezquake/Online Manual.url")).not.toBeNull();
+  });
+
+  it("never puts two entries under one name in an archive", async () => {
+    // `qw/configs/config.cfg` would strip to the same entry as ezquake's. A
+    // zip with duplicate names is valid but readers disagree about which
+    // wins (minizip takes the first, Python the last), so the plan's rule
+    // applies: the later item replaces the earlier one.
+    const colliding: Manifest = {
+      ...manifest,
+      packages: {
+        ...manifest.packages,
+        gpl: {
+          bytes: 40,
+          files: [
+            ...manifest.packages.gpl!.files,
+            { path: "ezquake/configs/config.cfg", size: 4, sha256: "a" },
+            { path: "qw/configs/config.cfg", size: 6, sha256: "b" },
+          ],
+        },
+      },
+    };
+    const options = defaultOptions("windows");
+    const plan = buildPlan(colliding, null, options);
+    const dest = new MockDestination("browser", "browser-windows");
+    const logs: string[] = [];
+    const result = await runInstall({
+      plan,
+      options,
+      manifest: colliding,
+      destination: dest,
+      transport: fakeTransport(() => NaN),
+      installerVersion: "0.1.0",
+      onLog: (e) => logs.push(e.message),
+    });
+    expect(result.ok).toBe(true);
+    const entries = readZip(dest.bytesAt("id1/configs.pk3")!);
+    expect(
+      [...entries.keys()].filter((k) => k === "configs/config.cfg"),
+    ).toEqual(["configs/config.cfg"]);
+    expect(
+      logs.some((m) => m.includes("both pack as configs/config.cfg")),
+    ).toBe(true);
   });
 
   it("still parks server files, which no pack can carry", async () => {

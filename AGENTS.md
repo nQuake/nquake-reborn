@@ -182,6 +182,16 @@ destination — that is how an upstream `mvdsv` wins over the bundled one.
   because stripping `prox/` off `prox/configs/config.cfg` collides with
   `ezquake/configs/config.cfg`.
 
+  **What may be packed is decided by `PlanItem.side`, never by the path.**
+  `fortress/` holds a client config (from `addon-fortress`) *and* the TF
+  server's (from `sv-fortress`); packing the latter would hide it from MVDSV.
+  The builder stamps every item with the half of the install it came from and
+  `archiveFor` refuses anything marked `server`. Two configs that strip to the
+  same entry inside one archive are deduped the way the plan dedupes
+  destinations — later wins — with a warning, because a zip may hold duplicate
+  names and readers disagree about which one counts (minizip takes the first,
+  Python's `zipfile` the last).
+
   What cannot be packed stays parked: `ktx/qwprogs.dll`, which MVDSV loads
   with `LoadLibrary` via `FS_NextPath` and so must be a real file, and the
   KTX / QTV / QWFWD configs — MVDSV reads `.pak` but no zip at all, and QTV
@@ -364,6 +374,7 @@ Conventional Commits; PRs squash-merge, so the PR title is the commit.
 | The `src/` layout or boundaries | The table above, `README.md`, `docs/architecture.md` |
 | A wizard step, option or default | `scripts/screenshots.mjs` if a test id moved; a changeset fragment; "The wizard" above |
 | Which distfiles paths the plan names | `nQuake/distfiles/AGENTS.md` (its "Paths are a contract" list) |
+| A distfiles change adding configs in a **new** game dir | `MOD_GAMEDIRS` in `domain/paths.ts` — otherwise a Windows web install quietly needs `nquake-finish.bat` again. `audit-catalog.mjs` fails on it |
 | The manifest or upstream index shape | `src/domain/manifest.ts` / `upstream.ts`, the generators (`distfiles/scripts/build-manifest.mjs`, `scripts/mirror-upstream.mjs`), and the `schema` number |
 | Anything under `tauri/` | `tauri/README.md`, and re-read "The desktop shell is thin" |
 | A layer boundary, a surface capability or a debugging recipe | `.agents/skills/debug/SKILL.md` |

@@ -47,6 +47,8 @@ export type TemplateTransform =
   | { kind: "ktx-port"; port: number }
   | { kind: "qtv" };
 
+export type InstallSide = "client" | "server";
+
 export interface PlanItem {
   /** Destination path relative to the install folder, forward slashes. */
   dest: string;
@@ -54,6 +56,13 @@ export interface PlanItem {
   source: PlanSource;
   /** Progress group id (see `PlanGroup`). */
   group: string;
+  /**
+   * Which half of the install this file belongs to. The path cannot tell you:
+   * `fortress/` holds both a client config (from `addon-fortress`) and the TF
+   * server's (from `sv-fortress`), and only the client's may be packed into a
+   * pk3 — MVDSV reads no zips. See `paths.ts#resolveName`.
+   */
+  side: InstallSide;
   /** Needs the executable bit on Linux/macOS (browsers can't set it — the start script does). */
   executable?: boolean;
 }
@@ -121,6 +130,9 @@ class PlanBuilder {
     this.items.push(item);
   }
 
+  /** Everything pushed from here on belongs to this half of the install. */
+  side: InstallSide = "client";
+
   /** Add every file of a distfiles package, with optional per-file rules. */
   pkg(
     name: string,
@@ -149,6 +161,7 @@ class PlanBuilder {
         dest,
         size: file.size,
         group,
+        side: this.side,
         executable: opts.executable?.(file.path) || undefined,
         source: transform
           ? { kind: "template", pkg: name, file, transform }
@@ -176,6 +189,7 @@ class PlanBuilder {
         dest: file.path,
         size: file.size,
         group,
+        side: this.side,
         executable: opts.executable?.(file.path) || undefined,
         source: { kind: "upstream", component, target: targetId, file },
       });
@@ -188,6 +202,7 @@ class PlanBuilder {
       dest,
       size: new TextEncoder().encode(text).byteLength,
       group,
+      side: this.side,
       executable: executable || undefined,
       source: { kind: "generated", text },
     });
@@ -215,6 +230,7 @@ export function buildPlan(
       dest: "id1/pak1.pak",
       size: PAK1_SIZE,
       group: "pak1",
+      side: b.side,
       source: { kind: "user", id: "pak1" },
     });
   }
@@ -275,6 +291,7 @@ export function buildPlan(
   }
 
   // ---- Server
+  b.side = "server";
   if (wantsServer(o)) {
     const s = o.server;
     const gpl = manifest.packages["sv-gpl"];
@@ -385,6 +402,7 @@ export function buildPlan(
           dest: `ktx/${srv.cfg}`,
           size: portTemplate.size + 256,
           group: "config",
+          side: b.side,
           source: {
             kind: "template",
             pkg: "sv-gpl",
@@ -407,6 +425,7 @@ export function buildPlan(
           dest: "qtv/qtv.cfg",
           size: qtvTemplate.size + 256,
           group: "config",
+          side: b.side,
           source: {
             kind: "template",
             pkg: "sv-gpl",

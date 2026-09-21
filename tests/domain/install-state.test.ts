@@ -11,6 +11,7 @@ const file = (dest: string, size: number, sha: string): PlanItem => ({
   dest,
   size,
   group: "client",
+  side: "client" as const,
   source: {
     kind: "distfiles",
     pkg: "gpl",
@@ -45,6 +46,7 @@ describe("canReuse", () => {
       dest: "x.cfg",
       size: 3,
       group: "config",
+      side: "client",
       source: { kind: "generated", text: "abc" },
     };
     expect(canReuse(gen, 3, null)).toBe(false);

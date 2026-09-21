@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import type { WizardCtx } from "../../app/wizard.ts";
 import {
@@ -6,7 +6,84 @@ import {
   formatDuration,
   formatRate,
 } from "../../domain/format.ts";
+import type { InstallProgress } from "../../net/installer.ts";
 import { Button, Callout, ProgressBar } from "../primitives.tsx";
+
+/** How many lines of the log are visible before it scrolls. */
+const LOG_ROWS = 10;
+
+/**
+ * The install's running log: what has landed, newest at the bottom, with
+ * whatever is downloading right now underneath it — a terminal rather than
+ * three truncated paths on one line. It follows the tail like `tail -f`
+ * unless the user scrolls up to read something, and then leaves them alone.
+ */
+function FileLog({
+  progress,
+  running,
+}: {
+  progress: InstallProgress;
+  running: boolean;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [follow, setFollow] = useState(true);
+  const lines = progress.recent;
+
+  useEffect(() => {
+    const el = box.current;
+    if (el && follow) el.scrollTo(0, el.scrollHeight);
+  }, [lines, progress.active, follow]);
+
+  return (
+    <div
+      ref={box}
+      data-testid="install-log"
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        // Within a line of the bottom still counts as following it.
+        setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 24);
+      }}
+      className="overflow-y-auto rounded-md border border-line bg-page-bg p-3 font-mono text-xs leading-relaxed"
+      style={{ height: `${LOG_ROWS * 1.625 + 1.5}rem` }}
+      aria-label="Installed files"
+      aria-live="off"
+    >
+      {lines.length === 0 && !running && (
+        <div className="text-muted">Nothing yet.</div>
+      )}
+      {lines.map((f) => (
+        <div key={`${f.at}-${f.dest}`} className="flex gap-2">
+          <span
+            className={
+              f.status === "failed"
+                ? "text-danger"
+                : f.status === "skipped"
+                  ? "text-muted"
+                  : "text-success"
+            }
+            aria-hidden="true"
+          >
+            {f.status === "failed" ? "x" : f.status === "skipped" ? "=" : "+"}
+          </span>
+          <span className="min-w-0 flex-1 break-all text-fg">{f.dest}</span>
+          <span className="shrink-0 tabular-nums text-muted">
+            {f.status === "skipped" ? "unchanged" : formatBytes(f.size)}
+          </span>
+        </div>
+      ))}
+      {running &&
+        progress.active.map((dest) => (
+          <div key={dest} className="flex gap-2 text-muted">
+            <span aria-hidden="true">…</span>
+            <span className="min-w-0 flex-1 break-all">{dest}</span>
+          </div>
+        ))}
+      {running && progress.active.length === 0 && lines.length === 0 && (
+        <div className="text-muted">Preparing…</div>
+      )}
+    </div>
+  );
+}
 
 export function InstallStep({ ctx }: { ctx: WizardCtx }) {
   const { run, plan, startInstall, cancelInstall, next, back, caps, mode } =
@@ -141,16 +218,10 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
         ))}
       </ul>
 
-      {/* The file names going past are the proof that something is happening;
-          they stay in Simple mode. */}
-      {p && running && p.active.length > 0 && (
-        <div
-          className="truncate font-mono text-xs text-muted"
-          data-testid="active-files"
-        >
-          {p.active.slice(0, 3).join("  ·  ")}
-          {p.active.length > 3 && `  ·  +${p.active.length - 3}`}
-        </div>
+      {/* The files going past are the proof that something is happening, so
+          this stays in Simple mode too. */}
+      {p && (run.status !== "idle" || p.recent.length > 0) && (
+        <FileLog progress={p} running={running} />
       )}
 
       {run.status === "failed" && (

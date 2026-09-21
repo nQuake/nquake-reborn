@@ -1,6 +1,7 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
 import { mockDestination, type WizardCtx } from "../../app/wizard.ts";
+import { displayPath } from "../../platform/destination.ts";
 import { FolderIcon } from "../icons.tsx";
 import { Badge, Button, Callout, KeyValue, Toggle } from "../primitives.tsx";
 
@@ -8,6 +9,36 @@ export function FolderStep({ ctx }: { ctx: WizardCtx }) {
   const { caps, folder, chooseFolder, setUseSubfolder, options } = ctx;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The desktop app can name a folder without a dialog, so it gets the
+  // standard `~/nquake` picked for it — Next works straight away, and
+  // "Choose a different folder…" is there for anyone who wants elsewhere.
+  // A browser cannot: the File System Access API only ever hands the page a
+  // folder the user picked themselves, so there the button is the only way in.
+  const canDefault = caps.surface === "tauri" && caps.realInstall;
+  const [defaultPath, setDefaultPath] = useState<string | null>(null);
+  useEffect(() => {
+    if (!canDefault) return;
+    let live = true;
+    void (async () => {
+      try {
+        const { defaultTauriDestination, defaultTauriPath } =
+          await import("../../platform/tauri.ts");
+        const path = await defaultTauriPath();
+        if (!live) return;
+        setDefaultPath(path);
+        // Only while nothing is chosen: the step remounts on every visit, so
+        // coming back never throws away the folder the user picked instead.
+        if (!folder) await chooseFolder(await defaultTauriDestination());
+      } catch {
+        /* No home directory to offer; the picker still works. */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+    // Mount-time decision only — `folder` is deliberately not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canDefault]);
 
   const pick = async () => {
     setBusy(true);
@@ -33,12 +64,21 @@ export function FolderStep({ ctx }: { ctx: WizardCtx }) {
     }
   };
 
-  const suggested = options.platform === "windows" ? "C:\\nQuake" : "~/nquake";
+  const suggested =
+    defaultPath ?? (options.platform === "windows" ? "C:\\nQuake" : "~/nquake");
 
   return (
     <div className="flex flex-col gap-6">
       <p className="text-sm text-fg">
-        Where should nQuake live? <code>{suggested}</code> is a good spot.{" "}
+        {canDefault ? (
+          <>
+            nQuake goes in <code>{suggested}</code> unless you say otherwise.
+          </>
+        ) : (
+          <>
+            Where should nQuake live? <code>{suggested}</code> is a good spot.
+          </>
+        )}{" "}
         {options.platform === "windows" && (
           <span className="text-muted">
             Not Program Files — the game needs to write next to itself.
@@ -73,6 +113,11 @@ export function FolderStep({ ctx }: { ctx: WizardCtx }) {
             Your browser will ask you to allow saving into it.
           </span>
         )}
+        {canDefault && !folder && (
+          <span className="text-xs text-muted">
+            Or just press Next to use the default.
+          </span>
+        )}
       </div>
 
       {error && <Callout tone="error">{error}</Callout>}
@@ -83,7 +128,12 @@ export function FolderStep({ ctx }: { ctx: WizardCtx }) {
             rows={[
               [
                 "Folder",
-                <span className="font-mono">{folder.picked.name}</span>,
+                <span className="font-mono break-all">
+                  {displayPath(
+                    folder.picked,
+                    folder.useSubfolder ? "nQuake" : undefined,
+                  )}
+                </span>,
               ],
               [
                 "Contents",

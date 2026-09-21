@@ -1,3 +1,5 @@
+import { useState } from "preact/hooks";
+
 import type { WizardCtx } from "../../app/wizard.ts";
 import { renderPresetCfg } from "../../domain/configs.ts";
 import {
@@ -30,6 +32,7 @@ const KEY_LABELS: [keyof MovementKeys, string][] = [
 export function ConfigStep({ ctx }: { ctx: WizardCtx }) {
   const { options, setOptions } = ctx;
   const cfg = options.client.config;
+  const [nickTouched, setNickTouched] = useState(false);
   const setCfg = (patch: Partial<typeof cfg>) =>
     setOptions((o) => ({
       ...o,
@@ -49,8 +52,12 @@ export function ConfigStep({ ctx }: { ctx: WizardCtx }) {
         <Field
           label="Nickname"
           htmlFor="nickname"
-          hint="Your in-game name. Later, /name changes it — and /cl_fakename, which is what prefixes your team messages."
-          error={cfg.name.trim() ? null : "Pick a name."}
+          hint="Required. Your in-game name — later, /name changes it, and /cl_fakename, which is what prefixes your team messages."
+          error={
+            nickTouched && !cfg.name.trim()
+              ? "Enter a nickname to continue."
+              : null
+          }
         >
           <input
             id="nickname"
@@ -58,7 +65,11 @@ export function ConfigStep({ ctx }: { ctx: WizardCtx }) {
             data-testid="nickname"
             value={cfg.name}
             maxLength={31}
+            placeholder="Your nickname"
+            required
+            aria-required="true"
             autoComplete="nickname"
+            onBlur={() => setNickTouched(true)}
             onInput={(e) =>
               setCfg({ name: (e.currentTarget as HTMLInputElement).value })
             }

@@ -1,6 +1,7 @@
 import type { WizardCtx } from "../../app/wizard.ts";
 import { formatBytes } from "../../domain/format.ts";
 import { platformLabel } from "../../domain/platform.ts";
+import { displayPath } from "../../platform/destination.ts";
 import { Button, Callout, KeyValue, SectionTitle } from "../primitives.tsx";
 
 export function ReviewStep({ ctx }: { ctx: WizardCtx }) {
@@ -16,9 +17,12 @@ export function ReviewStep({ ctx }: { ctx: WizardCtx }) {
   const client = o.target !== "server";
   const server = o.target !== "client";
   const ez = catalog.upstream?.components.ezquake?.version;
-  const folderName = folder.useSubfolder
-    ? `${folder.picked.name}/nQuake`
-    : folder.picked.name;
+  // The full path where the surface knows it (the desktop app); a browser
+  // only ever tells the page the folder's own name.
+  const folderName = displayPath(
+    folder.picked,
+    folder.useSubfolder ? "nQuake" : undefined,
+  );
 
   const rows: [string, preact.ComponentChildren][] = [
     [
@@ -30,7 +34,7 @@ export function ReviewStep({ ctx }: { ctx: WizardCtx }) {
           : "Server",
     ],
     ["Platform", platformLabel(o.platform)],
-    ["Folder", <span className="font-mono">{folderName}</span>],
+    ["Folder", <span className="font-mono break-all">{folderName}</span>],
   ];
   if (client) {
     if (simple) {

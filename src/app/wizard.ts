@@ -402,13 +402,26 @@ export function mockDestination(): Destination {
   return new MockDestination(undefined, QUERY.names ?? "none");
 }
 
+/** The nickname is obligatory for any install that includes the client. */
+export function hasNickname(o: InstallOptions): boolean {
+  return o.client.config.name.trim().length > 0;
+}
+
 /** Whether the current step's answers are complete enough to move on. */
 export function canProceed(ctx: WizardCtx): boolean {
   switch (ctx.step) {
     case "welcome":
       return !ctx.catalog.loading && ctx.catalog.manifest !== null;
+    case "target":
+      // Simple mode has no config step, so the nickname it asks for here is
+      // the only chance to get one — and the installer insists on one.
+      return (
+        ctx.mode !== "simple" ||
+        !wantsClient(ctx.options) ||
+        hasNickname(ctx.options)
+      );
     case "config":
-      return ctx.options.client.config.name.trim().length > 0;
+      return hasNickname(ctx.options);
     case "server": {
       const s = ctx.options.server;
       return (

@@ -1,3 +1,5 @@
+import { useState } from "preact/hooks";
+
 import type { WizardCtx } from "../../app/wizard.ts";
 import { PLATFORMS } from "../../domain/platform.ts";
 import { BothIcon, MonitorIcon, ServerIcon } from "../icons.tsx";
@@ -6,6 +8,11 @@ import { Badge, ChoiceCard, Field, SectionTitle } from "../primitives.tsx";
 export function TargetStep({ ctx }: { ctx: WizardCtx }) {
   const { options, setOptions, caps, mode } = ctx;
   const simple = mode === "simple";
+  // The nickname has no default any more, so the field starts empty and Next
+  // is disabled until it is filled. Say so quietly; only turn it red once the
+  // user has been in the field and left it empty.
+  const [nickTouched, setNickTouched] = useState(false);
+  const nickMissing = options.client.config.name.trim().length === 0;
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -75,14 +82,24 @@ export function TargetStep({ ctx }: { ctx: WizardCtx }) {
             <Field
               label="The name other players will see"
               htmlFor="nickname-simple"
+              hint="Required — Next stays disabled until you enter one."
+              error={
+                nickTouched && nickMissing
+                  ? "Enter a nickname to continue."
+                  : null
+              }
             >
               <input
                 id="nickname-simple"
                 className="input"
                 data-testid="nickname"
                 value={options.client.config.name}
+                placeholder="Your nickname"
+                required
+                aria-required="true"
                 maxLength={31}
                 autoComplete="nickname"
+                onBlur={() => setNickTouched(true)}
                 onInput={(e) =>
                   setOptions((o) => ({
                     ...o,

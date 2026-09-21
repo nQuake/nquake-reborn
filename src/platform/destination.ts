@@ -12,6 +12,13 @@ export interface DestinationEntry {
 export interface Destination {
   /** Folder name to show the user. */
   readonly name: string;
+  /**
+   * The full path, where the surface knows it. The desktop app does; a
+   * browser deliberately does not — the File System Access API hands the page
+   * a handle with nothing but a `name`, so there `~/nquake` and
+   * `~/games/nquake` both read as "nquake". Display falls back to `name`.
+   */
+  readonly path?: string;
   readonly kind: "fs-access" | "tauri" | "mock";
   /** Size of an existing file, or null when absent. */
   stat(path: string): Promise<{ size: number } | null>;
@@ -32,6 +39,22 @@ export interface Destination {
    * `domain/paths.ts`); the OS-backed ones refuse nothing.
    */
   readonly nameRules: NameRules;
+}
+
+/** The path separator a destination's own path uses. */
+function separatorFor(path: string): string {
+  return path.includes("\\") && !path.includes("/") ? "\\" : "/";
+}
+
+/**
+ * How to show the install folder: the full path when the surface knows it,
+ * the bare folder name otherwise, with the "nQuake" subfolder appended when
+ * the wizard is going to create one.
+ */
+export function displayPath(dest: Destination, subfolder?: string): string {
+  const base = dest.path ?? dest.name;
+  if (!subfolder) return base;
+  return `${base.replace(/[\\/]+$/, "")}${separatorFor(base)}${subfolder}`;
 }
 
 export function splitPath(path: string): { dirs: string[]; name: string } {

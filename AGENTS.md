@@ -257,13 +257,19 @@ Steps are computed from the options **and the mode** (`stepsFor` in
 `app/wizard.ts`).
 
 - **Simple** (default) is Next, Next, Next on the QuakeWorld standard
-  setup: welcome → target (Play / Host / Both, platform, optional nickname)
+  setup: welcome → target (Play / Host / Both, platform, **nickname**)
   → folder → review → install → done. Defaults live in
   `domain/options.ts#defaultOptions`: latest ezQuake, 24-bit textures on,
-  no HD textures / TF / CA, nickname `player`, WASD; server: two KTX ports
+  no HD textures / TF / CA, WASD; server: two KTX ports
   from 27500, QTV + QWFWD on, latest MVDSV + KTX, full map pack, generated
   rcon / QTV passwords. **A Simple install must never need the Advanced
   steps to be playable.**
+- **The nickname is the one answer with no default.** `defaultOptions`
+  leaves `client.config.name` empty and `canProceed` blocks the step that
+  asks for it — target in Simple, config in Advanced — until it is filled;
+  a server-only install is never asked. `preset.cfg` points both `name` and
+  `cl_fakename` at it, so a default here would be a room full of players
+  called "player" saying "PLAYER:" in team chat.
 - **Advanced** unfolds client → config (keys, mouse, custom binds, preset
   preview) and/or server (identity, ports, passwords, services, binaries,
   content) between target and folder. The switch sits in the card header;
@@ -273,6 +279,18 @@ Steps are computed from the options **and the mode** (`stepsFor` in
 Each step is a component taking `ctx: WizardCtx`. Navigation lives in
 `App.tsx` (desktop: the card footer; phones: a sticky bar under the card).
 `canProceed` gates Next per step.
+
+The folder step shows `Destination.path` where the surface has one, and only
+`name` where it does not: the File System Access API hands a browser a handle
+carrying a folder's name and nothing else, which is why a web install shows
+"nquake" and not "~/nquake". The desktop app knows the path, so it also
+arrives with `~/nquake` already chosen (`defaultTauriDestination`, created
+lazily on the first write) and Next works straight away.
+
+The install step's file list is a log, not a status line: `InstallProgress`
+carries `recent`, the last `RECENT_LIMIT` files that finished **in the order
+they finished** (`items` is keyed by destination and in plan order, which
+cannot say when anything landed), and `FileLog` tails it.
 
 ### Simulation mode
 

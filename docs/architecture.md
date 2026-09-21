@@ -34,9 +34,14 @@ The installer is three pure things and two impure ones.
   (simulation). Two capability fields say what a surface can do:
   `canSetExecutable` (only Tauri) and `nameRules` (`"none"` outside the
   browser, `"browser"` or `"browser-windows"` in it, by the host OS).
+  `path` is a third thing a surface may or may not know: the desktop app has
+  the folder's full path, a browser is given a handle with only a `name`, so
+  the wizard shows `displayPath(dest)` and falls back to the name.
 - **Installer** (`src/net/installer.ts`) — a worker pool that walks the plan
   through a `Transport` into a `Destination`, largest files first, reporting
-  progress, keeping unchanged files (`install-state.ts`), collecting
+  progress (including `recent`, the tail of files that finished, in the order
+  they finished, which is what the install step logs),
+  keeping unchanged files (`install-state.ts`), collecting
   failures, and finishing with `nquake-reborn.json` and `README-nquake.txt`.
   Items the surface cannot name are either parked under a `.nqinstall` name
   (`result.sidecars`, with `nquake-finish.bat` written at the end to rename

@@ -37,7 +37,9 @@ The installer is three pure things and two impure ones.
   `path` is a third thing a surface may or may not know: the desktop app has
   the folder's full path, a browser is given a handle with only a `name`, so
   the wizard shows `displayPath(dest)` and falls back to the name.
-- **Installer** (`src/net/installer.ts`) — a worker pool that walks the plan
+- **Installer** (`src/net/installer.ts`) — a worker pool (`DEFAULT_CONCURRENCY`
+  files at a time; they are HTTP/2 streams to one host, not connections) that
+  walks the plan
   through a `Transport` into a `Destination`, largest files first, reporting
   progress (including `recent`, the tail of files that finished, in the order
   they finished, which is what the install step logs),

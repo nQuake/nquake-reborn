@@ -24,6 +24,7 @@ import type { Platform } from "../domain/platform.ts";
 import { buildPlan, type InstallPlan } from "../domain/plan.ts";
 import type { Upstream } from "../domain/upstream.ts";
 import {
+  DEFAULT_CONCURRENCY,
   runInstall,
   type InstallLogEntry,
   type InstallProgress,
@@ -289,7 +290,10 @@ export function useWizard(caps: Capabilities): WizardCtx {
     setRun({ status: "running", progress: null, log: [], result: null });
     const manifest = catalog.manifest;
     const mock = folder.picked.kind === "mock";
-    const concurrency = mock ? 4 : 6;
+    // The simulation keeps its own small pool: its "downloads" are a timer,
+    // so more of them only makes the pretend install finish sooner than the
+    // real one ever could.
+    const concurrency = mock ? 4 : DEFAULT_CONCURRENCY;
     const transport = mock
       ? createMockTransport({ totalBytes: plan.totalBytes, concurrency })
       : createHttpTransport();

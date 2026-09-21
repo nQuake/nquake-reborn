@@ -292,6 +292,18 @@ carries `recent`, the last `RECENT_LIMIT` files that finished **in the order
 they finished** (`items` is keyed by destination and in plan order, which
 cannot say when anything landed), and `FileLog` tails it.
 
+**An install is two workloads, and both halves have to be modelled.** The
+queue runs largest first, so a client install is ~70 files carrying nearly
+all of the bytes and then ~450 carrying one round trip each.
+`DEFAULT_CONCURRENCY` (12) is what hides that tail's latency — these are
+HTTP/2 streams to one host, not the six connections an HTTP/1.1 browser
+allowed, so the old 6 left the CDN idle — and `domain/progress.ts`'s
+`FileCostMeter` is what estimates it: a least-squares fit of per-file
+overhead and per-byte cost over the last files to finish, including reused
+ones. `RateMeter` still measures the displayed speed; it must not be asked
+for the ETA again, because bytes-per-second goes to nothing exactly when the
+work stops being about bytes.
+
 ### Simulation mode
 
 `platform/capabilities.ts` decides. Phones and tablets ("QuakeWorld doesn't

@@ -32,6 +32,27 @@ describe("renderPresetCfg", () => {
     const cfg = renderPresetCfg(o.client.config, "linux");
     expect(cfg).not.toContain("\r\n");
     expect(cfg).toContain('name "a\'b"');
+    expect(cfg).toContain('cl_fakename "a\'b"');
+  });
+
+  it("points cl_fakename at the nickname, and says why", () => {
+    // nquake_default.cfg sets cl_fakename "pla", and ezQuake rewrites every
+    // say_team as <cl_fakename><suffix><message> — so without this every
+    // team message reads "PLA: ..." no matter what `name` says.
+    const o = defaultOptions("linux");
+    o.client.config.name = "terryb";
+    const cfg = renderPresetCfg(o.client.config, "linux");
+    expect(cfg).toContain('cl_fakename "terryb"');
+    // It only wins because preset.cfg is exec'd after nquake_default.cfg,
+    // which is worth a comment in a file a player will open one day.
+    expect(cfg).toMatch(/\/\/ Team messages \(say_team\)/);
+    expect(cfg).toContain("PLA:");
+
+    // An empty nickname falls back to the same default for both.
+    o.client.config.name = "   ";
+    const fallback = renderPresetCfg(o.client.config, "linux");
+    expect(fallback).toContain('name "Player"');
+    expect(fallback).toContain('cl_fakename "Player"');
   });
 });
 

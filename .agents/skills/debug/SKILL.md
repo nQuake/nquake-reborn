@@ -30,7 +30,8 @@ screenshot usually hands you both the destination and the message.
 | What the user sees | What it means | Open |
 | --- | --- | --- |
 | `Cannot create <path>` | The browser's file system API refused the *name*. Not a network problem, and retrying can never help. Note the extension **and the reporter's OS**: the refused set is longer on Windows (`.cfg`, `.dll`, `.ini`, `.manifest`) than anywhere else. | `src/domain/paths.ts`, `src/platform/fs-access.ts` |
-| `Cannot create` on `.cfg` / `.dll`, Windows only | Already fixed: those are written with a `.nqinstall` suffix and `nquake-finish.bat` renames them. A fresh report means the user never ran it, or a surface lost its rules. | `src/domain/paths.ts`, `src/domain/configs.ts#renderFixupScript` |
+| `Cannot create` on `.cfg` / `.dll`, Windows only | Already handled. Client configs are packed into `id1/configs.pk3` (a browser may create a `.pk3`, and ezQuake reads configs out of one); server files get a `.nqinstall` suffix and `nquake-finish.bat`. A fresh report means a path fell outside `archiveFor`'s game dirs. | `src/domain/paths.ts`, `src/domain/pk3.ts`, `src/domain/configs.ts#renderFixupScript` |
+| "my config/binds did not apply" on a Windows web install | The archive is there but ezQuake did not read it. Check the pack is in `id1/` (lowest priority) and that entry paths are *game-dir relative* — `qw/autoexec.cfg` is `autoexec.cfg` inside the pack, not `qw/autoexec.cfg`. | `src/domain/paths.ts#archiveFor` |
 | `Expected N bytes, received M` | The manifest and the bytes disagree — usually a stale manifest, or a truncated response. | `src/net/transport.ts`, the manifest's `commit` pin |
 | `HTTP 404` | A package or path was renamed in `nQuake/distfiles` without the plan being changed. | `src/domain/plan.ts`, distfiles `AGENTS.md` |
 | A CORS / network error on a download | Something built a non-`raw.githubusercontent.com` URL. Release assets send no CORS header — that is the whole reason there are no zips. | `src/net/sources.ts` |
@@ -78,6 +79,20 @@ Each script explains its own flags in a header comment; `plan.mjs` and
 `--bundled-client`, `--bundled-binaries`, `--ports N`), because a bug that only
 appears for one combination is common and the plan is a pure function of them.
 Match the reporter's answers first.
+
+**Check a generated archive against something that is not our own code.** A
+zip writer and a matching zip reader can share a bug and agree with each other
+— which is exactly what happened once here, a central-directory size field
+that was twelve bytes long. `MockDestination.bytesAt(path)` hands back the raw
+bytes, so dump them and let Python read them:
+
+```sh
+python3 -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); \
+print(z.namelist()); print('crc-bad:', z.testzip())" id1_configs.pk3
+```
+
+`zipfile` uses the size field the way minizip does, so it catches what a
+hand-rolled reader waves through.
 
 **`--restricted` matters, and so does which browser it pretends to be.** The
 mock destination writes anything, so a bug that only happens in a real browser
@@ -139,6 +154,9 @@ Keep both in step with `paths.ts`: if either list grows, so should ours.
 - **Spaces in filenames are fine.** `ktx/configs/usermodes/dmm4cfgs for Rocket
   Arena maps.txt` installs happily. When a name fails, suspect the extension —
   and check which OS the reporter is on before deciding the rule.
+- **No loose `.cfg` files in a Windows web install is the design**, not a
+  failed install: they are inside `id1/configs.pk3`. Open it with any zip tool
+  (it is a plain store-only zip) before concluding anything is missing.
 - **`skipped` on a second run is the feature**, not a failure: `canReuse` keeps
   unchanged files, so re-running into the same folder is the update path and
   the retry path.

@@ -20,6 +20,7 @@ import {
   browserBlockReason,
   resolveName,
 } from "../domain/paths.ts";
+import { buildPk3, type ArchiveEntry } from "../domain/pk3.ts";
 import {
   renderTemplate,
   type InstallPlan,
@@ -72,6 +73,14 @@ export interface InstallResult {
   sidecars: SidecarRename[];
   /** The generated script that puts the sidecars in place, or null. */
   fixupScript: string | null;
+  /**
+   * Configs packed into an archive instead of written loose, because this
+   * surface refuses to name them — ezQuake reads them out of it either way,
+   * so unlike a sidecar this costs the player nothing.
+   */
+  archived: { dest: string; entry: string }[];
+  /** The archives written, in the order they were built. */
+  archives: string[];
   skipped: number;
   written: number;
   bytes: number;
@@ -121,12 +130,21 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
   const blocked: InstallResult["blocked"] = [];
   const sidecars: SidecarRename[] = [];
   const writePath = new Map<string, string>();
+  // dest -> which archive it is packed into and where inside it.
+  const archiveOf = new Map<string, { archive: string; entry: string }>();
+  const archiveBytes = new Map<string, Uint8Array>();
   const planItems: PlanItem[] = [];
   for (const it of plan.items) {
     const resolved = resolveName(it.dest, rules);
     if (resolved.kind === "drop") {
       blocked.push({ dest: it.dest, reason: resolved.reason });
       continue;
+    }
+    if (resolved.kind === "archive") {
+      archiveOf.set(it.dest, {
+        archive: resolved.archive,
+        entry: resolved.entry,
+      });
     }
     if (resolved.kind === "sidecar") {
       writePath.set(it.dest, resolved.path);
@@ -138,6 +156,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
   // install record can see it; only the write goes to the sidecar.
   const pathFor = (dest: string) => writePath.get(dest) ?? dest;
   let fixupScript: string | null = null;
+  const archives: string[] = [];
   const bytesTotal = planItems.reduce((n, it) => n + it.size, 0);
 
   const items = new Map<string, ItemProgress>();
@@ -215,11 +234,41 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     items.set(it.dest, { ...cur, ...patch });
   };
 
+  /** Bytes bound for the archive are held in memory instead of written. */
+  const collectInto = (dest: string): WritableStream<Uint8Array> => {
+    const chunks: Uint8Array[] = [];
+    return new WritableStream<Uint8Array>({
+      write(chunk) {
+        chunks.push(chunk);
+      },
+      close() {
+        const total = chunks.reduce((n, c) => n + c.byteLength, 0);
+        const joined = new Uint8Array(total);
+        let at = 0;
+        for (const c of chunks) {
+          joined.set(c, at);
+          at += c.byteLength;
+        }
+        archiveBytes.set(dest, joined);
+      },
+    });
+  };
+
+  const writeOrCollect = async (dest: string, text: string) => {
+    if (archiveOf.has(dest)) {
+      archiveBytes.set(dest, new TextEncoder().encode(text));
+      return;
+    }
+    await destination.writeText(pathFor(dest), text);
+  };
+
   const pipeToDestination = async (
     it: PlanItem,
     stream: ReadableStream<Uint8Array>,
   ) => {
-    const writable = await destination.openWrite(pathFor(it.dest));
+    const writable = archiveOf.has(it.dest)
+      ? collectInto(it.dest)
+      : await destination.openWrite(pathFor(it.dest));
     let itemBytes = 0;
     const counter = new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
@@ -237,7 +286,9 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
 
   const installOne = async (it: PlanItem) => {
     if (signal?.aborted) return;
-    const existing = await destination.stat(pathFor(it.dest));
+    const existing = archiveOf.has(it.dest)
+      ? null
+      : await destination.stat(pathFor(it.dest));
     if (canReuse(it, existing?.size ?? null, previous)) {
       skipped++;
       filesDone++;
@@ -253,7 +304,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       const s = it.source;
       switch (s.kind) {
         case "generated":
-          await destination.writeText(pathFor(it.dest), s.text);
+          await writeOrCollect(it.dest, s.text);
           bytesDone += it.size;
           break;
         case "template": {
@@ -265,7 +316,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
             options,
             plan.servers,
           );
-          await destination.writeText(pathFor(it.dest), rendered);
+          await writeOrCollect(it.dest, rendered);
           bytesDone += it.size;
           break;
         }
@@ -344,6 +395,34 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       INSTALL_STATE_FILE,
       JSON.stringify(state, null, 2) + "\n",
     );
+    // Configs a browser cannot name, packed where ezQuake will still read
+    // them. Grouped in plan order so the bytes are reproducible run to run.
+    const packs = new Map<string, ArchiveEntry[]>();
+    for (const it of planItems) {
+      const where = archiveOf.get(it.dest);
+      const bytes = archiveBytes.get(it.dest);
+      if (!where || !bytes) continue;
+      const list = packs.get(where.archive) ?? [];
+      list.push({ path: where.entry, bytes });
+      packs.set(where.archive, list);
+    }
+    let packed = 0;
+    for (const [path, entries] of packs) {
+      const w = await destination.openWrite(path);
+      const writer = w.getWriter();
+      await writer.write(buildPk3(entries));
+      await writer.close();
+      archives.push(path);
+      packed += entries.length;
+    }
+    if (packed) {
+      log(
+        "info",
+        `${packed} config(s) could not be created under their own names here, so they ` +
+          `were packed into ${archives.join(", ")} — ezQuake reads them from there.`,
+      );
+    }
+
     // The one step a browser install on Windows cannot take itself.
     if (sidecars.length) {
       const script = renderFixupScript(sidecars, fixupBackup);
@@ -361,6 +440,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       renderInstallReadme(options, plan, installerVersion, new Date(now()), {
         executableBitsSet: destination.canSetExecutable,
         fixupScript,
+        archives,
         folderName: destination.name,
       }),
     );
@@ -384,6 +464,8 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     blocked,
     sidecars,
     fixupScript,
+    archived: [...archiveOf].map(([dest, w]) => ({ dest, entry: w.entry })),
+    archives,
     skipped,
     written,
     bytes: bytesDone,

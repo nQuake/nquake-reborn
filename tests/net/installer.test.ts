@@ -62,6 +62,46 @@ function fakeTransport(
   };
 }
 
+/** Parse a store-only zip via its central directory — an independent read. */
+function readZip(bytes: Uint8Array): Map<string, Uint8Array> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = bytes.length - 22;
+  while (eocd >= 0 && view.getUint32(eocd, true) !== 0x06054b50) eocd--;
+  if (eocd < 0) throw new Error("no end-of-central-directory record");
+  const count = view.getUint16(eocd + 10, true);
+  const cdSize = view.getUint32(eocd + 12, true);
+  const cdStart = view.getUint32(eocd + 16, true);
+  // A reader that trusts the size field (Python's zipfile does, to allow for
+  // prepended data) lands in the wrong place if it disagrees with the offset.
+  if (cdStart + cdSize !== eocd) {
+    throw new Error(
+      `central directory size ${cdSize} disagrees with offsets ${cdStart}..${eocd}`,
+    );
+  }
+  let at = cdStart;
+  const out = new Map<string, Uint8Array>();
+  for (let i = 0; i < count; i++) {
+    if (view.getUint32(at, true) !== 0x02014b50)
+      throw new Error("bad central header");
+    const method = view.getUint16(at + 10, true);
+    if (method !== 0) throw new Error(`entry is not stored: method ${method}`);
+    const size = view.getUint32(at + 24, true);
+    const nameLen = view.getUint16(at + 28, true);
+    const extraLen = view.getUint16(at + 30, true);
+    const commentLen = view.getUint16(at + 32, true);
+    const local = view.getUint32(at + 42, true);
+    const name = new TextDecoder().decode(
+      bytes.subarray(at + 46, at + 46 + nameLen),
+    );
+    const localNameLen = view.getUint16(local + 26, true);
+    const localExtraLen = view.getUint16(local + 28, true);
+    const from = local + 30 + localNameLen + localExtraLen;
+    out.set(name, bytes.subarray(from, from + size));
+    at += 46 + nameLen + extraLen + commentLen;
+  }
+  return out;
+}
+
 describe("runInstall", () => {
   it("writes every planned file, the record and the readme", async () => {
     const options = defaultOptions("windows");
@@ -187,11 +227,12 @@ describe("runInstall", () => {
     expect(await plain.stat("ezquake/Online Manual.url")).not.toBeNull();
   });
 
-  it("parks names a browser on Windows refuses and leaves a script to rename them", async () => {
-    // Chromium's Safe Browsing file-type list marks `.cfg` and `.dll` as
-    // DANGEROUS on Windows, so a browser there cannot create a single one of
-    // nQuake's configs. They are written with a `.nqinstall` suffix instead.
-    const withDll: Manifest = {
+  it("packs the configs a browser on Windows cannot name into a pk3", async () => {
+    // Chromium's Safe Browsing file-type list marks `.cfg` DANGEROUS on
+    // Windows, so a browser there cannot create one of nQuake's configs. It
+    // can create a `.pk3`, and ezQuake reads configs out of one just the
+    // same, so they go in there and the install needs no repair step.
+    const withConfigs: Manifest = {
       ...manifest,
       packages: {
         ...manifest.packages,
@@ -207,13 +248,13 @@ describe("runInstall", () => {
       },
     };
     const options = defaultOptions("windows");
-    const plan = buildPlan(withDll, null, options);
+    const plan = buildPlan(withConfigs, null, options);
     const dest = new MockDestination("browser", "browser-windows");
     const logs: string[] = [];
     const result = await runInstall({
       plan,
       options,
-      manifest: withDll,
+      manifest: withConfigs,
       destination: dest,
       transport: fakeTransport(() => NaN),
       installerVersion: "0.1.0",
@@ -222,63 +263,89 @@ describe("runInstall", () => {
 
     expect(result.ok).toBe(true);
     expect(result.failed).toEqual([]);
-    // Nothing is dropped here: on Windows even the `.url` shortcut can be
-    // parked and renamed afterwards.
-    expect(result.blocked).toEqual([]);
-    const parked = result.sidecars.map((s) => s.to);
-    expect(parked).toContain("qw/autoexec.cfg");
-    expect(parked).toContain("ezquake/configs/preset.cfg");
-    expect(parked).toContain("ezquake/Online Manual.url");
+
+    // A client install needs no repair step at all now.
+    expect(result.sidecars).toEqual([]);
+    expect(result.fixupScript).toBeNull();
+    expect(result.archives).toEqual(["id1/configs.pk3"]);
+
+    const packed = result.archived.map((a) => a.dest);
+    expect(packed).toContain("qw/autoexec.cfg");
+    expect(packed).toContain("ezquake/configs/preset.cfg");
+    expect(packed).toContain("ezquake/configs/config.cfg");
 
     const w = dest.written();
-    expect(w).toContain("qw/autoexec.cfg.nqinstall");
+    expect(w).toContain("id1/configs.pk3");
     expect(w).not.toContain("qw/autoexec.cfg");
+    expect(w.some((p) => p.endsWith(".nqinstall"))).toBe(false);
     // Files the browser can name are untouched.
     expect(w).toContain("ezquake.exe");
 
-    // The record and the totals still name the real destination.
+    // The archive is a real zip, with the paths relative to the game dir —
+    // entries in a pack resolve against the dir the pack sits in.
+    const entries = readZip(dest.bytesAt("id1/configs.pk3")!);
+    expect([...entries.keys()].sort()).toEqual([
+      "autoexec.cfg",
+      "configs/config.cfg",
+      "configs/preset.cfg",
+    ]);
+    expect(
+      new TextDecoder().decode(entries.get("configs/preset.cfg")),
+    ).toContain('name "player"');
+
+    // The record still names the real destination, not the archive.
     const state = JSON.parse((await dest.readText("nquake-reborn.json"))!);
     expect(
       state.files.some((f: { path: string }) => f.path === "qw/autoexec.cfg"),
     ).toBe(true);
-    expect(
-      state.files.some((f: { path: string }) => f.path.endsWith(".nqinstall")),
-    ).toBe(false);
 
-    expect(result.fixupScript).toBe("nquake-finish.bat");
-    const bat = (await dest.readText("nquake-finish.bat"))!;
-    expect(bat).toContain(
-      'if exist "qw\\autoexec.cfg.nqinstall" move /y "qw\\autoexec.cfg.nqinstall" "qw\\autoexec.cfg" >nul',
-    );
-    // A played-in config.cfg cannot be seen or renamed here, so the script
-    // moves it aside itself rather than the rename eating it.
-    expect(bat).toMatch(
-      /if exist "ezquake\\configs\\config\.cfg" ren "ezquake\\configs\\config\.cfg" "config-[\d-]+\.cfg"/,
-    );
-    expect(bat.indexOf("ren ")).toBeLessThan(
-      bat.indexOf("config.cfg.nqinstall"),
-    );
-    expect(logs.some((m) => m.includes("nquake-finish.bat"))).toBe(true);
+    // The `.url` shortcut is left out rather than dragging a script back in.
+    expect(result.blocked.map((b) => b.dest)).toEqual([
+      "ezquake/Online Manual.url",
+    ]);
     const readme = (await dest.readText("README-nquake.txt"))!;
-    expect(readme).toContain("FIRST: FINISH THE INSTALL");
-    // The command-prompt form, so it can be pasted rather than double-clicked.
-    // A browser only learns the folder's name, never its path.
-    expect(readme).toContain('cd /d "C:\\path\\to\\browser"');
-    expect(readme).toContain("  nquake-finish.bat");
+    expect(readme).not.toContain("FIRST: FINISH THE INSTALL");
+    expect(logs.some((m) => m.includes("id1/configs.pk3"))).toBe(true);
 
-    // The same plan on a surface that writes through the OS is unchanged.
+    // The same plan on a surface that writes through the OS packs nothing.
     const plain = new MockDestination();
     const full = await runInstall({
       plan,
       options,
-      manifest: withDll,
+      manifest: withConfigs,
       destination: plain,
       transport: fakeTransport(() => NaN),
       installerVersion: "0.1.0",
     });
-    expect(full.sidecars).toEqual([]);
-    expect(full.fixupScript).toBeNull();
+    expect(full.archives).toEqual([]);
+    expect(full.archived).toEqual([]);
     expect(await plain.stat("qw/autoexec.cfg")).not.toBeNull();
+    expect(await plain.stat("id1/configs.pk3")).toBeNull();
+    expect(await plain.stat("ezquake/Online Manual.url")).not.toBeNull();
+  });
+
+  it("still parks server files, which no pack can carry", async () => {
+    // MVDSV reads no zips at all, and LoadLibrary needs a real file, so a
+    // server install keeps the repair script — it is started from a script
+    // anyway, and start_servers.bat runs it.
+    const options = defaultOptions("windows");
+    options.target = "both";
+    const plan = buildPlan(manifest, null, options);
+    const dest = new MockDestination("browser", "browser-windows");
+    const result = await runInstall({
+      plan,
+      options,
+      manifest,
+      destination: dest,
+      transport: fakeTransport(() => NaN),
+      installerVersion: "0.1.0",
+    });
+    const parked = result.sidecars.map((s) => s.to);
+    expect(parked.some((p) => p.startsWith("ktx/"))).toBe(true);
+    expect(result.fixupScript).toBe("nquake-finish.bat");
+    // Client configs still went into the archive, not the script.
+    expect(result.archives).toContain("id1/configs.pk3");
+    expect(parked).not.toContain("ezquake/configs/preset.cfg");
   });
 
   it("keeps unchanged files on a second run and backs up config.cfg", async () => {

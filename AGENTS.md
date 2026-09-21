@@ -112,7 +112,7 @@ browser.
 
 | Layer | Holds | May import |
 | --- | --- | --- |
-| `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, client launcher, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `paths.ts` (names a browser cannot create), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
+| `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, client launcher, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `paths.ts` (names a browser cannot create), `pk3.ts` (the zip writer that gets round them), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
 | `src/net` | `sources.ts` (URLs, index loading, env overrides), `transport.ts` (fetch + retry/backoff; 404 is final), `installer.ts` (`runInstall`: worker pool, progress, failures collected, record + readme + chmod at the end) | domain, platform types |
 | `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam — `canSetExecutable`, `nameRules`), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
 | `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue…), `Stepper.tsx`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
@@ -160,22 +160,47 @@ destination — that is how an upstream `mvdsv` wins over the bundled one.
   `./…` where the bits were set.
 - **Names a browser cannot create.** Chromium's File System Access API
   refuses `.lnk`, `.scf` and `.url` outright (and CLSID extensions, trailing
-  dots, Windows device names) whatever the OS underneath — nQuake ships
-  `ezquake/Online Manual.url`. It *also* refuses every extension Safe
-  Browsing's `download_file_types.asciipb` marks `DANGEROUS` **on the OS the
-  browser runs on**, and on Windows that is `cfg`, `dll`, `ini` and
-  `manifest`: a browser on Windows cannot create one of nQuake's ~150 configs
-  or `ktx/qwprogs.dll`, while the same browser on Linux writes them happily.
-  `move()` validates the new name the same way, so there is no renaming out
-  of it from the page. `domain/paths.ts` holds the rule
-  (`browserBlockReason`, `resolveName`), `Destination.nameRules` says which
-  set a surface has (`"none"` / `"browser"` / `"browser-windows"`, picked
-  from the *host* OS in `fs-access.ts#browserNameRules`), and `runInstall`
-  either drops the item (`result.blocked` notes, never failures) or — on
-  Windows, where the files are the install — writes it beside its
-  destination with a `.nqinstall` suffix (`result.sidecars`) and generates
-  `nquake-finish.bat` (`configs.ts#renderFixupScript`) to move them into
-  place. Spaces in a name are fine; it is always the extension.
+  dots, Windows device names) whatever the OS underneath. It *also* refuses
+  every extension Safe Browsing's `download_file_types.asciipb` marks
+  `DANGEROUS` **on the OS the browser runs on**, and on Windows that is
+  `cfg`, `dll`, `ini` and `manifest`: a browser on Windows cannot create one
+  of nQuake's ~150 configs or `ktx/qwprogs.dll`, while the same browser on
+  Linux writes them happily. `move()` validates the new name the same way, so
+  there is no renaming out of it from the page.
+
+  A browser *can* create a `.pk3`, though, and ezQuake reads configs out of a
+  pack exactly as it reads them off disk (`Cmd_Exec_f` → `FS_LoadHeapFile` →
+  the VFS). So the client configs are **packed, not parked**: `domain/pk3.ts`
+  writes a store-only zip (ezQuake links minizip, which accepts
+  `compression_method` 0) and the install gets `id1/configs.pk3`, plus a
+  `configs.pk3` in each mod dir that has configs of its own. `id1` is what
+  makes this safe — ezQuake registers id1, then ezquake, then qw, each
+  *prepended* (`fs.c#FS_InitFilesystem`), so id1 is the lowest-priority game
+  dir and the `ezquake/configs/config.cfg` ezQuake writes on quit always
+  wins over the packed copy. The same archive in `ezquake/` would shadow the
+  player's saved settings on every launch. Mod dirs get their own archive
+  because stripping `prox/` off `prox/configs/config.cfg` collides with
+  `ezquake/configs/config.cfg`.
+
+  What cannot be packed stays parked: `ktx/qwprogs.dll`, which MVDSV loads
+  with `LoadLibrary` via `FS_NextPath` and so must be a real file, and the
+  KTX / QTV / QWFWD configs — MVDSV reads `.pak` but no zip at all, and QTV
+  and QWFWD are not Quake programs. Those get the `.nqinstall` suffix and the
+  generated `nquake-finish.bat`, which `start_servers.bat` runs itself. **A
+  server install is started from a script either way, so a repair step is
+  free there; a client install is double-clicked, so it must not need one.**
+  Shortcut formats (`.lnk`/`.scf`/`.url`) are the exception to all of it:
+  nothing reads them, so they are dropped on every browser surface rather
+  than dragging a batch file back into a client install.
+
+  `domain/paths.ts` holds all of this (`browserBlockReason`, `archiveFor`,
+  `resolveName`), `Destination.nameRules` says which set a surface has
+  (`"none"` / `"browser"` / `"browser-windows"`, picked from the *host* OS in
+  `fs-access.ts#browserNameRules`), and `runInstall` walks the result into
+  `result.archives` / `result.archived`, `result.sidecars` + `fixupScript`,
+  or `result.blocked` notes. The desktop app has `nameRules: "none"` and so
+  writes every file loose, archives nothing, and needs no script.
+  Spaces in a name are fine; it is always the extension.
 
 Renaming a package or one of the explicitly named paths in distfiles breaks
 this; change both in the same breath.
@@ -310,11 +335,17 @@ Conventional Commits; PRs squash-merge, so the PR title is the commit.
   executable bit on the downloaded AppImage. A Chromium install **on
   Windows** then found the big one: the same rule refuses `.cfg` and `.dll`,
   i.e. every config nQuake ships, so those are written with a `.nqinstall`
-  suffix and `nquake-finish.bat` renames them. All three are fixed; the
-  shapes are worth remembering, since the mock destination reproduces none
-  of them unless it is given `nameRules`. Nobody has yet confirmed a real
-  Windows install end to end with the fixup script — the next thing to ask
-  a reporter for.
+  suffix and `nquake-finish.bat` renames them — and then, better, the client
+  configs stopped needing the script at all: they are packed into
+  `id1/configs.pk3`, which a browser is allowed to create and ezQuake reads
+  from. All are fixed; the shapes are worth remembering, since the mock
+  destination reproduces none of them unless it is given `nameRules`.
+  **Not yet confirmed by a real Windows install:** that ezQuake picks the
+  configs up out of the archive. The zip is validated against an independent
+  reader (Python's `zipfile`, CRCs and all) but nothing has proved minizip
+  agrees in situ — the next thing to ask a reporter for. `nquake-finish.bat`
+  itself is likewise unconfirmed end to end, though only server installs
+  still produce one.
 - Firefox and Safari have no folder access, so they only get the
   simulation; a "download as zip" fallback (streaming a zip to the browser)
   is the obvious next surface behind the same seam.

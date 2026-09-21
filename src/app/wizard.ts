@@ -339,6 +339,8 @@ export function useWizard(caps: Capabilities): WizardCtx {
             blocked: [],
             sidecars: [],
             fixupScript: null,
+            archived: [],
+            archives: [],
             skipped: 0,
             written: 0,
             bytes: 0,

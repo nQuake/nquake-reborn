@@ -10,7 +10,10 @@ import type { Transport } from "../net/transport.ts";
 export class MockDestination implements Destination {
   readonly kind = "mock";
   readonly canSetExecutable = false;
-  private files = new Map<string, { size: number; text?: string }>();
+  private files = new Map<
+    string,
+    { size: number; text?: string; bytes?: Uint8Array }
+  >();
 
   constructor(
     readonly name = "nQuake (simulated)",
@@ -37,14 +40,24 @@ export class MockDestination implements Destination {
   }
 
   async openWrite(path: string): Promise<WritableStream<Uint8Array>> {
+    const chunks: Uint8Array[] = [];
     let size = 0;
     const files = this.files;
     return new WritableStream<Uint8Array>({
       write(chunk) {
         size += chunk.byteLength;
+        // Kept so tests (and the dry-run script) can look inside a generated
+        // archive; the real destinations stream straight to disk.
+        chunks.push(chunk.slice());
       },
       close() {
-        files.set(path, { size });
+        const bytes = new Uint8Array(size);
+        let at = 0;
+        for (const c of chunks) {
+          bytes.set(c, at);
+          at += c.byteLength;
+        }
+        files.set(path, { size, bytes });
       },
     });
   }
@@ -66,6 +79,11 @@ export class MockDestination implements Destination {
   }
 
   async setExecutable() {}
+
+  /** Raw bytes of a file written through `openWrite`, when it was one. */
+  bytesAt(path: string): Uint8Array | null {
+    return this.files.get(path)?.bytes ?? null;
+  }
 
   /** Paths written so far (for tests and the done screen). */
   written(): string[] {

@@ -1,4 +1,4 @@
-# Agent guidance for nquake-reborn
+# Agent guidance for nQuake Reborn (nQuake/web-installer)
 
 The canonical source of truth for AI coding agents in this repo. `CLAUDE.md`
 and `.github/copilot-instructions.md` are symlinks to this file.
@@ -25,7 +25,7 @@ Historically nQuake was an NSIS `.exe` (`nQuake/client-win32`) and bash
 scripts (`nQuake/client-linux`, `nQuake/server-linux`) that downloaded
 `<package>.zip` files from mirrors and unzipped them. **This repository is the
 rewrite: the same job done from a web page**, plus a thin desktop shell. It
-is live at **https://nquake.com/nquake-reborn/** (the nQuake GitHub org has a
+is live at **https://nquake.com/web-installer/** (the nQuake GitHub org has a
 Pages custom domain; the Pages URL redirects there).
 
 ### QuakeWorld vocabulary you will meet in the code
@@ -415,9 +415,9 @@ Modelled on the notes app.
   assembles the root slot (highest `v*` tag; `main` until the first release),
   `/preview/` (`main`) and an opt-in `/branch/` (parked on the orphan
   `branch-deploy` branch) into one artifact. The base path is
-  `/<repo-name>/` on `*.github.io` (so `/nquake-reborn/`) or `/` when the
+  `/<repo-name>/` on `*.github.io` (so `/web-installer/`) or `/` when the
   `PAGES_CNAME` secret is set; `vite.config.ts` reads it from `VITE_BASE`.
-  The org-level custom domain makes the site https://nquake.com/nquake-reborn/
+  The org-level custom domain makes the site https://nquake.com/web-installer/
   without any secret. `dist/404.html` is a copy of `index.html`.
 - `release.yml` (manual): bump from the fragments' front-matter
   (`compute-bump.mjs`, `breaking: true` → major, Added/Changed → minor,

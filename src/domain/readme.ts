@@ -163,6 +163,6 @@ export function renderInstallReadme(
     "Server browser:        https://www.quakeservers.net/quakeworld/servers/",
   );
   out.push("ezQuake:               https://ezquake.com/");
-  out.push("Installer source:      https://github.com/nQuake/nquake-reborn");
+  out.push("Installer source:      https://github.com/nQuake/web-installer");
   return out.join(eol) + eol;
 }

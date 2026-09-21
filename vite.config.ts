@@ -31,8 +31,8 @@ function emitVersionJson(label: string): Plugin {
 // cmd.exe rejects it, which broke the Windows desktop bundle.
 export default defineConfig(({ mode }) => {
   // The GitHub Pages base path is injected by `pages.yml` via VITE_BASE so the
-  // same bundle works at `/nquake-reborn/`, `/nquake-reborn/preview/`, or
-  // `/nquake-reborn/branch/` (or at `/` behind a custom domain). Locally it
+  // same bundle works at `/web-installer/`, `/web-installer/preview/`, or
+  // `/web-installer/branch/` (or at `/` behind a custom domain). Locally it
   // serves at `/`. The Tauri shell (`tauri/`) embeds the bundle and loads it
   // off a private origin, so it builds with a relative base.
   const isEmbedded = mode === "tauri";

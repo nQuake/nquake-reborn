@@ -1,6 +1,6 @@
-# nquake-reborn
+# nQuake Reborn
 
-[![ci](https://github.com/nQuake/nquake-reborn/actions/workflows/ci.yml/badge.svg)](https://github.com/nQuake/nquake-reborn/actions/workflows/ci.yml)
+[![ci](https://github.com/nQuake/web-installer/actions/workflows/ci.yml/badge.svg)](https://github.com/nQuake/web-installer/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](LICENSE)
 
 **nQuake as a web installer.** The QuakeWorld package that used to ship as an
@@ -12,7 +12,7 @@ every choice — ezQuake build, add-ons, keys, server ports, passwords, mods. A 
 as a desktop app.
 
 Live: the `main` branch deploys to GitHub Pages under
-`/nquake-reborn/preview/`; the latest release is served at `/nquake-reborn/`.
+`/web-installer/preview/`; the latest release is served at `/web-installer/`.
 
 ## How it works
 

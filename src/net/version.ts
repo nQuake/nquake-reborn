@@ -2,7 +2,7 @@
 // next to the bundle on every build, so asking "is there a newer installer
 // than the one running?" is one small fetch of a file on the same origin —
 // no API, no CORS, and it works at whatever base path the deploy sits on
-// (`/nquake-reborn/`, `/nquake-reborn/preview/`, or `/` behind the custom
+// (`/web-installer/`, `/web-installer/preview/`, or `/` behind the custom
 // domain).
 
 import { parseVersionInfo, type VersionInfo } from "../domain/update.ts";

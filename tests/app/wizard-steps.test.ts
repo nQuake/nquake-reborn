@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canProceed,
   hasNickname,
+  restoredStepIndex,
   stepsFor,
   type WizardCtx,
 } from "../../src/app/wizard.ts";
@@ -56,6 +57,37 @@ describe("stepsFor", () => {
 
   it("ships no nickname — the user has to type one", () => {
     expect(defaultOptions("linux").client.config.name).toBe("");
+  });
+});
+
+describe("where a restored session lands", () => {
+  const steps = () => {
+    const o = defaultOptions("linux");
+    o.target = "both";
+    return stepsFor(o, "advanced");
+  };
+  const at = (step: string, folderRestorable = true) =>
+    steps()[restoredStepIndex(steps(), step, { folderRestorable })]?.id;
+
+  it("puts the user back on the step they were on", () => {
+    expect(at("server")).toBe("server");
+    expect(at("folder")).toBe("folder");
+  });
+
+  it("never restores into a run — review is as far as it goes", () => {
+    expect(at("install")).toBe("review");
+    expect(at("done")).toBe("review");
+  });
+
+  it("stops at the folder step when the folder cannot be reopened", () => {
+    expect(at("review", false)).toBe("folder");
+    expect(at("install", false)).toBe("folder");
+    // Anything before the folder step is unaffected.
+    expect(at("client", false)).toBe("client");
+  });
+
+  it("starts from the top for a step this build no longer has", () => {
+    expect(at("gorehouse")).toBe("welcome");
   });
 });
 

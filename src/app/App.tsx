@@ -13,7 +13,7 @@ import {
   MoonIcon,
   SunIcon,
 } from "../ui/icons.tsx";
-import { Button, Card } from "../ui/primitives.tsx";
+import { Button, Callout, Card } from "../ui/primitives.tsx";
 import { Stepper } from "../ui/Stepper.tsx";
 import { ClientStep } from "../ui/steps/ClientStep.tsx";
 import { ConfigStep } from "../ui/steps/ConfigStep.tsx";
@@ -25,6 +25,7 @@ import { ServerStep } from "../ui/steps/ServerStep.tsx";
 import { TargetStep } from "../ui/steps/TargetStep.tsx";
 import { WelcomeStep } from "../ui/steps/WelcomeStep.tsx";
 import type { Capabilities } from "../platform/capabilities.ts";
+import { useSelfUpdate, type SelfUpdate } from "./self-update.ts";
 import { applyTheme, initialTheme, type Theme } from "./theme.ts";
 import {
   QUERY,
@@ -70,6 +71,17 @@ export function App({ caps }: { caps: Capabilities }) {
   const ctx = useWizard(caps);
   const [theme, setTheme] = useState<Theme>(() => initialTheme(QUERY.theme));
   useEffect(() => applyTheme(theme), [theme]);
+
+  // Keep the page on the newest deploy. The desktop app carries its own
+  // bundle, so there is nothing for it to fetch.
+  const update = useSelfUpdate({
+    enabled: caps.surface === "web" && QUERY.update,
+    installStatus: ctx.run.status,
+    // A browser's folder handle and a `pak1.pak` from a file dialog both die
+    // with the page; everything else comes back.
+    losesInput: ctx.folder?.picked.kind === "fs-access" || ctx.pak1 !== null,
+    save: (target) => ctx.saveNow("update", target),
+  });
 
   const { step } = ctx;
   const View = STEP_VIEW[step];
@@ -127,6 +139,10 @@ export function App({ caps }: { caps: Capabilities }) {
       <p className="slogan px-4 text-base text-fg-bright sm:hidden">
         QuakeWorld — where it all started
       </p>
+
+      <div className="mx-auto w-full max-w-5xl px-4 pt-2 empty:hidden sm:px-6">
+        <UpdateNotice ctx={ctx} update={update} />
+      </div>
 
       <main className="mx-auto grid w-full max-w-5xl flex-1 gap-4 px-4 pb-6 pt-4 sm:px-6 md:grid-cols-[220px_1fr] md:gap-8 md:pb-10">
         <aside className="md:sticky md:top-6 md:self-start">
@@ -196,6 +212,87 @@ export function App({ caps }: { caps: Capabilities }) {
       </footer>
     </div>
   );
+}
+
+/**
+ * The two things the self-update has to say out loud: that a newer installer
+ * is there and this page is not taking it on its own (because a reload would
+ * cost the user something), and — after a reload that did happen by itself —
+ * that the page they are looking at is a new one and their answers came with
+ * it. Everything else it does silently, which is the point.
+ */
+function UpdateNotice({ ctx, update }: { ctx: WizardCtx; update: SelfUpdate }) {
+  const [hidden, setHidden] = useState(false);
+  const restored = ctx.restored;
+
+  if (update.action === "ask" && update.latest) {
+    const costs = [
+      ctx.folder?.picked.kind === "fs-access" ? "pick your folder again" : null,
+      ctx.pak1 ? "add your pak1.pak again" : null,
+    ].filter((c): c is string => c !== null);
+    return (
+      <Callout tone="info" title="A newer installer is available">
+        <div className="flex flex-col gap-2.5">
+          <p>
+            You are running <span className="font-mono">v{BUILD_LABEL}</span>;{" "}
+            <span className="font-mono">v{update.latest}</span> is live.
+            Everything you have filled in is kept
+            {costs.length > 0 ? (
+              <>
+                {" "}
+                — you will only have to {costs.join(" and ")}, which the browser
+                will not let a page remember.
+              </>
+            ) : (
+              "."
+            )}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="primary"
+              onClick={update.apply}
+              testId="update-apply"
+            >
+              Load it
+            </Button>
+            <Button variant="ghost" onClick={update.dismiss}>
+              Not now
+            </Button>
+          </div>
+        </div>
+      </Callout>
+    );
+  }
+
+  // Only until the install starts: by then it has been read, and the install
+  // step is about the files, not about us.
+  if (restored?.reason === "update" && !hidden && ctx.run.status === "idle") {
+    const lost = [
+      restored.folder?.kind === "fs-access" ? "Pick your folder again" : null,
+      restored.pak1Name ? `Add ${restored.pak1Name} again` : null,
+    ].filter((c): c is string => c !== null);
+    return (
+      <Callout tone="success" title="Updated to the latest installer">
+        <div className="flex items-start justify-between gap-4">
+          <p>
+            This page reloaded itself as{" "}
+            <span className="font-mono">v{BUILD_LABEL}</span> and brought your
+            answers along.
+            {lost.length > 0 ? ` ${lost.join(". ")}.` : ""}
+          </p>
+          <button
+            type="button"
+            onClick={() => setHidden(true)}
+            className="focus-ring shrink-0 cursor-pointer rounded px-1 text-xs text-muted hover:text-fg"
+          >
+            Dismiss
+          </button>
+        </div>
+      </Callout>
+    );
+  }
+
+  return null;
 }
 
 /**

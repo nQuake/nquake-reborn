@@ -18,6 +18,16 @@ The installer is three pure things and two impure ones.
   `start_ezquake.sh` client launcher and the start/stop scripts per platform.
   Every generated shell script chmods itself and what it launches, because a
   browser cannot set the executable bit.
+- **Session** (`src/domain/session.ts`) — what survives a reload, and how to
+  read it back. The page updates itself by reloading, so the wizard's answers
+  are written to session storage and merged over today's `defaultOptions` on
+  the way up: the build that wrote them is not the build that reads them.
+- **Update** (`src/domain/update.ts`) — when the app may replace itself. Any
+  change in the deployed build label counts; a running install is never
+  interrupted, a reload that would cost the user a folder handle or a picked
+  `pak1.pak` is offered rather than taken, and the same build is only reached
+  for twice before the page stops trying (a CDN can announce a bundle it is
+  not serving yet).
 - **Paths** (`src/domain/paths.ts`) — the names a browser install cannot
   create, and what to do about them. Chromium's File System Access API
   rejects `.lnk`, `.scf` and `.url` on every OS (nQuake ships

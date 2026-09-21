@@ -215,6 +215,36 @@ destination — that is how an upstream `mvdsv` wins over the bundled one.
 Renaming a package or one of the explicitly named paths in distfiles breaks
 this; change both in the same breath.
 
+### distfiles is ours too
+
+**[nQuake/distfiles](https://github.com/nQuake/distfiles) is a repository we
+can change, not a fixed input.** When a bug's real home is a shipped file —
+a config with a wrong default, a name no browser can create, a file over
+raw's 100 MB limit — fix it there rather than working around it here, and say
+in the PR which of the two repos the other change is in. Its `AGENTS.md`
+documents the package layout and the contract this installer depends on.
+
+Both halves have to stay honest about each other, so:
+
+- `distfiles/scripts/check-contract.mjs` enforces that contract in distfiles
+  CI — the 100 MB limit, the paths `plan.ts` names, the names a browser
+  refuses, and that every client config can be packed into a pk3 without two
+  of them claiming the same entry. A distfiles change that would break a
+  Windows web install fails there, at the point of change, instead of in a
+  player's folder.
+- `.agents/skills/debug/scripts/audit-catalog.mjs` is the deeper check on
+  this side: it builds real plans for several option sets, so it sees what a
+  file-level check cannot.
+- A change to either contract belongs in both: the checker's rules and the
+  lists in `domain/paths.ts` describe the same agreement from two sides.
+
+A fix that is only possible in distfiles still reaches players slowly —
+everyone with an existing install keeps the old file until they reinstall —
+so prefer fixing it in *both* places when the installer can also override it.
+`cl_fakename` is the worked example: `preset.cfg` sets it per install (new
+installs, immediately) and distfiles no longer ships the bad default (every
+other route, eventually).
+
 ## The wizard
 
 Steps are computed from the options **and the mode** (`stepsFor` in

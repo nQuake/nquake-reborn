@@ -33,12 +33,16 @@ export interface ScriptFile {
  * That ordering is what lets this file fix `cl_fakename`. ezQuake rewrites
  * every `say_team` message as `<cl_fakename><cl_fakename_suffix><message>`
  * (`cl_cmd.c`, `CL_Say_f`) and ships the cvar empty, i.e. off — but
- * `nquake_default.cfg` sets it to `"pla"`, a leftover placeholder from
- * "player". So on a stock nQuake every team message comes out as
- * "PLA: ...", whatever the player calls themselves, and `name`, `nick`,
- * `tname` and `tpname` all fail to change it because none of them feed
- * `cl_fakename`. Since the nickname is the one thing the installer asks for,
- * it sets both, and says so in the file.
+ * `nquake_default.cfg` sets it to `"pla"`. That is not the leftover it looks
+ * like: a short fakename is the point, since it leaves a team message's width
+ * for the message rather than the nick, and `"pla"` abbreviates ezQuake's
+ * default `name "player"`. What it cannot do is follow a player who renames
+ * themselves — `name`, `nick`, `tname` and `tpname` all fail to change it,
+ * because none of them feed `cl_fakename` — so on a stock nQuake every team
+ * message comes out as "PLA: ..." whatever the player calls themselves.
+ * The nickname is the one thing the installer asks for, so it sets both here
+ * and says so in the file; distfiles keeps its default for every install that
+ * never ran this.
  */
 export function renderPresetCfg(cfg: ClientConfig, platform: Platform): string {
   const k = cfg.keys;

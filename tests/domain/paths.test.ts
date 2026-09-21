@@ -107,6 +107,27 @@ describe("browserBlockReason", () => {
     });
   });
 
+  it("packs only the client's half — a path cannot tell you which it is", () => {
+    // `fortress/` holds a client config (addon-fortress) *and* the TF
+    // server's (sv-fortress). Packing the server's would hide it from MVDSV,
+    // which reads .pak but no zip at all, so the side decides, not the dir.
+    expect(archiveFor("fortress/default.cfg", "client")).toEqual({
+      archive: "fortress/configs.pk3",
+      entry: "default.cfg",
+    });
+    expect(archiveFor("fortress/default.cfg", "server")).toBeNull();
+    expect(archiveFor("cace/ca.cfg", "server")).toBeNull();
+    expect(archiveFor("qw/autoexec.cfg", "server")).toBeNull();
+
+    // A server config falls through to the repair script it was always going
+    // to need, rather than into a pack nothing on that side can open.
+    expect(resolveName("cace/ca.cfg", "browser-windows", "server")).toEqual({
+      kind: "sidecar",
+      path: "cace/ca.cfg.nqinstall",
+      reason: expect.stringContaining("Windows"),
+    });
+  });
+
   it("drops a shortcut rather than making anyone run a script for it", () => {
     // `.url` is refused on every OS and nothing in nQuake reads it, so it is
     // left out everywhere — a bookmark is not worth a repair step.

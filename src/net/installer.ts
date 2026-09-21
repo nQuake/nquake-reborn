@@ -135,7 +135,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
   const archiveBytes = new Map<string, Uint8Array>();
   const planItems: PlanItem[] = [];
   for (const it of plan.items) {
-    const resolved = resolveName(it.dest, rules);
+    const resolved = resolveName(it.dest, rules, it.side);
     if (resolved.kind === "drop") {
       blocked.push({ dest: it.dest, reason: resolved.reason });
       continue;
@@ -397,17 +397,30 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     );
     // Configs a browser cannot name, packed where ezQuake will still read
     // them. Grouped in plan order so the bytes are reproducible run to run.
-    const packs = new Map<string, ArchiveEntry[]>();
+    // Keyed by entry path, so two configs that strip to the same name inside
+    // one archive cannot both end up in it. A zip may hold duplicate names
+    // and stay valid, but readers disagree about which one wins — minizip
+    // takes the first, others the last — so the plan's own rule applies
+    // instead: later items replace earlier ones.
+    const packs = new Map<string, Map<string, ArchiveEntry>>();
     for (const it of planItems) {
       const where = archiveOf.get(it.dest);
       const bytes = archiveBytes.get(it.dest);
       if (!where || !bytes) continue;
-      const list = packs.get(where.archive) ?? [];
-      list.push({ path: where.entry, bytes });
-      packs.set(where.archive, list);
+      const pack = packs.get(where.archive) ?? new Map<string, ArchiveEntry>();
+      if (pack.has(where.entry)) {
+        log(
+          "warn",
+          `${it.dest} and an earlier file both pack as ${where.entry} in ` +
+            `${where.archive}; keeping ${it.dest}.`,
+        );
+      }
+      pack.set(where.entry, { path: where.entry, bytes });
+      packs.set(where.archive, pack);
     }
     let packed = 0;
-    for (const [path, entries] of packs) {
+    for (const [path, pack] of packs) {
+      const entries = [...pack.values()];
       const w = await destination.openWrite(path);
       const writer = w.getWriter();
       await writer.write(buildPk3(entries));

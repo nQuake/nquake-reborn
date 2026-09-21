@@ -66,7 +66,8 @@ node .agents/skills/debug/scripts/dry-run.mjs --platform linux --restricted
 node .agents/skills/debug/scripts/dry-run.mjs --cat "start_ezquake|README"
 node .agents/skills/debug/scripts/dry-run.mjs --fail "\.pk3$"
 
-# Audit the live catalog against everything the installer assumes
+# Audit the live catalog against everything the installer assumes — including
+# client configs that no archive would take, and two that claim one entry
 node .agents/skills/debug/scripts/audit-catalog.mjs
 
 # Screenshots, with the sandbox's traps handled
@@ -157,6 +158,10 @@ Keep both in step with `paths.ts`: if either list grows, so should ours.
 - **No loose `.cfg` files in a Windows web install is the design**, not a
   failed install: they are inside `id1/configs.pk3`. Open it with any zip tool
   (it is a plain store-only zip) before concluding anything is missing.
+- **A `configs.pk3` in a server-only dir would be a bug**, not a feature:
+  MVDSV reads `.pak` and no zip at all, so a packed server config is one the
+  server can never see. `PlanItem.side` is what keeps them apart — `fortress/`
+  is both a client and a server game dir, so the path alone cannot.
 - **`skipped` on a second run is the feature**, not a failure: `canReuse` keeps
   unchanged files, so re-running into the same folder is the update path and
   the retry path.

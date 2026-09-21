@@ -49,7 +49,7 @@ export function ConfigStep({ ctx }: { ctx: WizardCtx }) {
         <Field
           label="Nickname"
           htmlFor="nickname"
-          hint="Your in-game name. You can change it any time with /name."
+          hint="Your in-game name. Later, /name changes it — and /cl_fakename, which is what prefixes your team messages."
           error={cfg.name.trim() ? null : "Pick a name."}
         >
           <input

@@ -241,9 +241,15 @@ Both halves have to stay honest about each other, so:
 A fix that is only possible in distfiles still reaches players slowly —
 everyone with an existing install keeps the old file until they reinstall —
 so prefer fixing it in *both* places when the installer can also override it.
-`cl_fakename` is the worked example: `preset.cfg` sets it per install (new
-installs, immediately) and distfiles no longer ships the bad default (every
-other route, eventually).
+But read the shipped file's intent before calling it broken. `cl_fakename` is
+the worked example of both halves: `nquake_default.cfg` sets it to `"pla"`,
+which looks like a leftover from `name "player"` and is deliberate — ezQuake
+rewrites every `say_team` as `<cl_fakename><suffix><message>`, so a short
+fakename is what leaves a team message's width for the message. The actual
+defect is narrower: nothing makes it follow a player who renames themselves.
+Only the installer knows the name, so `preset.cfg` writes it (new installs,
+immediately) and distfiles keeps its default, with a comment saying what it
+is for.
 
 ## The wizard
 

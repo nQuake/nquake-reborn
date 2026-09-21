@@ -15,6 +15,8 @@ export function renderInstallReadme(
     executableBitsSet?: boolean;
     /** Set when files are waiting under a `.nqinstall` name (see paths.ts). */
     fixupScript?: string | null;
+    /** Archives the configs were packed into, when the surface forced it. */
+    archives?: string[];
     /** The install folder's own name, for the `cd` in the fixup hint. */
     folderName?: string;
   } = {},
@@ -55,15 +57,32 @@ export function renderInstallReadme(
     out.push("");
   }
 
+  if (opts.archives?.length) {
+    out.push("WHERE THE CONFIGS WENT");
+    out.push("----------------------");
+    out.push(
+      "Chrome and Edge are not allowed to create .cfg files on Windows, so the",
+    );
+    out.push(`configs were packed into ${opts.archives.join(", ")} instead.`);
+    out.push(
+      "ezQuake reads them from there exactly as it would loose files, so there is",
+    );
+    out.push(
+      "nothing to do. Anything you later save or edit as a loose file wins over",
+    );
+    out.push("the packed copy.");
+    out.push("");
+  }
+
   if (o.target !== "server") {
     out.push("PLAYING");
     out.push("-------");
     if (o.platform === "windows") {
+      out.push("Run ezquake.exe. Your nickname and keys from the installer");
       out.push(
-        "Run ezquake.exe. Your nickname and keys from the installer are in",
-      );
-      out.push(
-        "ezquake/configs/preset.cfg and load automatically on first start.",
+        opts.archives?.length
+          ? "load automatically on first start, from preset.cfg in the archive above."
+          : "are in ezquake/configs/preset.cfg and load automatically on first start.",
       );
     } else if (o.platform === "linux") {
       out.push("Start the client from a terminal in this folder:");

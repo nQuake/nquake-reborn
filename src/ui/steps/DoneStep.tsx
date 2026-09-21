@@ -36,6 +36,15 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
     ...(r?.blocked ?? []).map(
       (b) => `${b.dest} was not installed: ${b.reason}.`,
     ),
+    // Packed rather than written loose. Nothing to do about it, but it
+    // explains why the folder has no loose .cfg files in it.
+    ...(r?.archives?.length
+      ? [
+          `${r.archived.length} config(s) were packed into ${r.archives.join(", ")}` +
+            " — Chrome cannot create .cfg files on Windows, and ezQuake reads them" +
+            " from there just the same.",
+        ]
+      : []),
   ];
 
   const openFolder = async () => {

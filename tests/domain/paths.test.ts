@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { browserBlockReason, resolveName } from "../../src/domain/paths.ts";
+import {
+  archiveFor,
+  browserBlockReason,
+  resolveName,
+} from "../../src/domain/paths.ts";
 
 describe("browserBlockReason", () => {
   it("blocks the extensions Chromium's file system API refuses", () => {
@@ -56,7 +60,7 @@ describe("browserBlockReason", () => {
     ).toBeNull();
   });
 
-  it("parks a blocked name beside its destination on Windows, drops it elsewhere", () => {
+  it("packs a blocked config into the archive ezQuake can read", () => {
     expect(resolveName("qw/autoexec.cfg", "none")).toEqual({
       kind: "write",
       path: "qw/autoexec.cfg",
@@ -65,23 +69,67 @@ describe("browserBlockReason", () => {
       kind: "write",
       path: "qw/autoexec.cfg",
     });
-    const parked = resolveName("qw/autoexec.cfg", "browser-windows");
-    expect(parked.kind).toBe("sidecar");
-    expect(parked.kind === "sidecar" && parked.path).toBe(
-      "qw/autoexec.cfg.nqinstall",
-    );
-    // The suffix has to be a name the same rules allow, or this is no help.
-    expect(
-      browserBlockReason("qw/autoexec.cfg.nqinstall", "browser-windows"),
-    ).toBeNull();
 
-    // A `.url` shortcut is worth nothing off Windows, so there it is dropped.
-    expect(resolveName("ezquake/Online Manual.url", "browser").kind).toBe(
-      "drop",
-    );
-    expect(
-      resolveName("ezquake/Online Manual.url", "browser-windows").kind,
-    ).toBe("sidecar");
+    // The three dirs ezQuake always searches share one archive, and it goes
+    // in id1 so a loose config.cfg written on quit outranks the packed copy.
+    for (const [dest, entry] of [
+      ["qw/autoexec.cfg", "autoexec.cfg"],
+      ["ezquake/configs/config.cfg", "configs/config.cfg"],
+      ["id1/x.cfg", "x.cfg"],
+    ] as const) {
+      expect(resolveName(dest, "browser-windows")).toEqual({
+        kind: "archive",
+        archive: "id1/configs.pk3",
+        entry,
+        reason: expect.stringContaining("Windows"),
+      });
+    }
+
+    // A mod dir gets its own, or prox's config.cfg would collide with
+    // ezquake's once the prefix is gone.
+    expect(archiveFor("prox/configs/config.cfg")).toEqual({
+      archive: "prox/configs.pk3",
+      entry: "configs/config.cfg",
+    });
+    expect(archiveFor("fortress/default.cfg")).toEqual({
+      archive: "fortress/configs.pk3",
+      entry: "default.cfg",
+    });
+
+    // Server dirs are never packed: MVDSV reads no zips, and the mod library
+    // has to be a real file for LoadLibrary. Those keep the repair script.
+    expect(archiveFor("ktx/port1.cfg")).toBeNull();
+    expect(archiveFor("qtv/qtv.cfg")).toBeNull();
+    expect(resolveName("ktx/qwprogs.dll", "browser-windows")).toEqual({
+      kind: "sidecar",
+      path: "ktx/qwprogs.dll.nqinstall",
+      reason: expect.stringContaining("Windows"),
+    });
+  });
+
+  it("drops a shortcut rather than making anyone run a script for it", () => {
+    // `.url` is refused on every OS and nothing in nQuake reads it, so it is
+    // left out everywhere — a bookmark is not worth a repair step.
+    for (const rules of ["browser", "browser-windows"] as const) {
+      expect(resolveName("ezquake/Online Manual.url", rules).kind).toBe("drop");
+    }
+    // The desktop app writes it, like everything else.
+    expect(resolveName("ezquake/Online Manual.url", "none")).toEqual({
+      kind: "write",
+      path: "ezquake/Online Manual.url",
+    });
+  });
+
+  it("never packs anything on a surface that writes through the OS", () => {
+    for (const dest of [
+      "qw/autoexec.cfg",
+      "ezquake/configs/preset.cfg",
+      "prox/configs/config.cfg",
+      "ktx/qwprogs.dll",
+      "ezquake/Online Manual.url",
+    ]) {
+      expect(resolveName(dest, "none")).toEqual({ kind: "write", path: dest });
+    }
   });
 
   it("blocks the other names the API rejects", () => {

@@ -21,13 +21,30 @@
 //   * `move()` validates the new name the same way, so renaming a file into
 //     place afterwards is not a way out either.
 //
-// A `.url` shortcut is no loss on Linux or macOS, so there it is simply left
-// out of the install. Losing every config on Windows is a different matter:
-// the install would not be nQuake. So on Windows those files are written
-// beside their real destination under a `.nqinstall` suffix (only the final
-// extension counts, and `nqinstall` is on no list), and the installer drops a
-// small `nquake-finish.bat` that moves them into place — the same shape as
-// the `start_*.sh` scripts that chmod what a browser could not.
+// A browser *can* create a `.pk3`, though, and ezQuake reads configs out of a
+// pk3 exactly as it reads them off disk. So the configs go into one archive,
+// `id1/configs.pk3`, and a browser install on Windows needs no repair step at
+// all. `id1` is the slot that makes this safe: ezQuake registers id1, then
+// ezquake, then qw, each prepended (`fs.c#FS_InitFilesystem`), so id1 is the
+// *lowest* priority game dir and the `ezquake/configs/config.cfg` that
+// ezQuake writes on quit always wins over the copy in the archive. Put the
+// same archive in `ezquake/` and it would shadow the player's saved settings
+// on every launch.
+//
+// What is left over after the archive is server-side: `ktx/qwprogs.dll`, which
+// MVDSV loads with `LoadLibrary` and so must be a real file, and the KTX / QTV
+// / QWFWD configs. Those are written beside their destination under a
+// `.nqinstall` suffix (only the final extension counts, and `nqinstall` is on
+// no list) and moved into place by the generated `nquake-finish.bat`, which
+// `start_servers.bat` runs itself. A server install is started from a script
+// either way, so a repair step costs nothing there; a client install is
+// double-clicked, so it must not need one.
+//
+// Shortcut formats are the exception to all of this: `.lnk`, `.scf` and `.url`
+// are refused on every OS, nothing in nQuake reads them, and repairing one is
+// not worth making a player run a batch file. nQuake ships one,
+// `ezquake/Online Manual.url` — a bookmark to the ezQuake manual, which the
+// readme links anyway — so browser installs simply leave it out and say so.
 
 /** Which name rules a destination enforces. `domain` decides what they mean. */
 export type NameRules = "none" | "browser" | "browser-windows";
@@ -37,6 +54,34 @@ export const SIDECAR_SUFFIX = ".nqinstall";
 
 /** The generated script that puts sidecar files under their real names. */
 export const FIXUP_SCRIPT = "nquake-finish.bat";
+
+/**
+ * The archive the client configs are packed into. It sits in `id1`, the
+ * lowest-priority game dir, so a loose file always beats the packed copy.
+ */
+export const CONFIG_PK3 = "id1/configs.pk3";
+
+/**
+ * Game dirs ezQuake always has in its search path. A path under one of these
+ * maps into `CONFIG_PK3` by dropping the prefix, because entries in a pack
+ * are resolved relative to the game dir the pack sits in, not to the install
+ * folder.
+ */
+const CORE_GAMEDIRS = ["id1/", "ezquake/", "qw/"];
+
+/**
+ * Client mod dirs, each of which gets its own `configs.pk3` rather than
+ * sharing the one in `id1`: strip `prox/` from `prox/configs/config.cfg` and
+ * it collides with `ezquake/configs/config.cfg`. A pack beside the mod's own
+ * `pak0.pak` / `prox.pk3` has exactly the precedence the loose file it
+ * replaces had, and is only in the search path under `-game`.
+ *
+ * This is an allow-list on purpose. A client dir missing from it costs a
+ * repair step; a *server* dir wrongly on it would pack configs into something
+ * that cannot read them — MVDSV has no zip support at all — so the failure
+ * modes are not symmetric and the safe default is to leave a dir out.
+ */
+const MOD_GAMEDIRS = ["fortress/", "prox/", "arena/", "cace/"];
 
 /** Refused by the File System Access API on every platform. */
 const BLOCKED_EXTENSIONS = new Set(["lnk", "scf", "url"]);
@@ -105,22 +150,61 @@ export function realPath(path: string): string {
     : path;
 }
 
+/**
+ * Which archive a config belongs in and where inside it, or null when it
+ * cannot be packed — ezQuake only reads `.cfg` files out of a pack through
+ * the VFS, and only for game dirs it actually searches.
+ */
+export function archiveFor(
+  dest: string,
+): { archive: string; entry: string } | null {
+  if (!dest.toLowerCase().endsWith(".cfg")) return null;
+  for (const dir of CORE_GAMEDIRS) {
+    if (dest.startsWith(dir)) {
+      return { archive: CONFIG_PK3, entry: dest.slice(dir.length) };
+    }
+  }
+  for (const dir of MOD_GAMEDIRS) {
+    if (dest.startsWith(dir)) {
+      return { archive: `${dir}configs.pk3`, entry: dest.slice(dir.length) };
+    }
+  }
+  return null;
+}
+
+/** Whether any component is a shortcut format — refused everywhere, read by nothing. */
+function isShortcut(path: string): boolean {
+  return path
+    .split("/")
+    .some((c) => c && BLOCKED_EXTENSIONS.has(extensionOf(c)));
+}
+
 export type NameResolution =
   /** Write it straight to `path`. */
   | { kind: "write"; path: string }
+  /** Pack it into `archive` at `entry` instead of writing it loose. */
+  | { kind: "archive"; archive: string; entry: string; reason: string }
   /** Write it to `path`; the fixup script renames it to the real one. */
   | { kind: "sidecar"; path: string; reason: string }
   /** Cannot be installed here at all. */
   | { kind: "drop"; reason: string };
 
 /**
- * How to write `dest` on a surface with these name rules. Only Windows gets
- * the sidecar treatment: it is the only place the fixup script runs, and the
- * only place the files it rescues are worth anything.
+ * How to write `dest` on a surface with these name rules, in the order that
+ * costs the player least: straight to disk, else packed into the archive
+ * ezQuake can read, else parked for the fixup script a server install runs
+ * anyway, else left out with a note.
  */
 export function resolveName(dest: string, rules: NameRules): NameResolution {
   const reason = browserBlockReason(dest, rules);
   if (!reason) return { kind: "write", path: dest };
+
+  // Nothing reads a shortcut, so never make a repair step out of one.
+  if (isShortcut(dest)) return { kind: "drop", reason };
+
+  const packed = archiveFor(dest);
+  if (packed) return { kind: "archive", ...packed, reason };
+
   const side = sidecarPath(dest);
   if (rules === "browser-windows" && !browserBlockReason(side, rules)) {
     return { kind: "sidecar", path: side, reason };

@@ -177,12 +177,22 @@ Keep both in step with `paths.ts`: if either list grows, so should ours.
   and `?mock=1` all get the full wizard with simulated downloads, and say so in
   a banner. "It didn't write anything" from a Firefox user is working as
   designed.
+- **"The page reloaded itself" is not a bug either.** The app polls
+  `version.json` and reloads into a newer deploy, having written the wizard's
+  answers to `sessionStorage` first (`domain/session.ts`, `app/self-update.ts`).
+  It never does it during an install, and it asks rather than takes when a
+  reload would lose a browser folder handle or a picked `pak1.pak`. A report of
+  answers coming back *wrong* after one is `sanitizeOptions`; a report of a
+  page reloading over and over is the `MAX_RELOAD_ATTEMPTS` guard failing to
+  hold, in `domain/update.ts`. `?update=off` stops it while you look.
 
 ## Poking at a running app
 
 `make dev`, then URL params: `?mock=1` (force simulation),
 `?mode=simple|advanced`, `?platform=windows|linux|macos`, `?theme=dark|light`,
-`?names=none|browser|browser-windows` (the simulated folder's name rules).
+`?names=none|browser|browser-windows` (the simulated folder's name rules),
+`?fresh=1` (ignore the saved session) and `?update=off` (stop the app
+reloading itself into a newer deploy).
 The build-time overrides `VITE_MANIFEST_URL` / `VITE_UPSTREAM_URL` point the
 two index files elsewhere — that is how the screenshot harness runs against a
 local `../distfiles/manifest.json` and `tests/fixtures/upstream.json`.

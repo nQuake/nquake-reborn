@@ -112,11 +112,11 @@ browser.
 
 | Layer | Holds | May import |
 | --- | --- | --- |
-| `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, client launcher, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `paths.ts` (names a browser cannot create), `pk3.ts` (the zip writer that gets round them), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
-| `src/net` | `sources.ts` (URLs, index loading, env overrides), `transport.ts` (fetch + retry/backoff; 404 is final), `installer.ts` (`runInstall`: worker pool, progress, failures collected, record + readme + chmod at the end) | domain, platform types |
+| `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, client launcher, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `session.ts` (what survives a reload) / `update.ts` (when the app may replace itself), `paths.ts` (names a browser cannot create), `pk3.ts` (the zip writer that gets round them), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
+| `src/net` | `sources.ts` (URLs, index loading, env overrides), `version.ts` (the deploy's own `version.json`), `transport.ts` (fetch + retry/backoff; 404 is final), `installer.ts` (`runInstall`: worker pool, progress, failures collected, record + readme + chmod at the end) | domain, platform types |
 | `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam — `canSetExecutable`, `nameRules`), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
 | `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue…), `Stepper.tsx`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
-| `src/app` | `wizard.ts` (state, flow, catalog loading, install run), `App.tsx` (shell, mode switch, nav), `main.tsx`, `theme.ts` | everything |
+| `src/app` | `wizard.ts` (state, flow, catalog loading, install run, saving and restoring the answers), `App.tsx` (shell, mode switch, nav), `self-update.ts` (the version poll) + `session-store.ts` (the `sessionStorage` glue), `main.tsx`, `theme.ts` | everything |
 | `tests/` | vitest suites mirroring `src/`; `tests/fixtures/upstream.json` | |
 | `scripts/` | `screenshots.mjs`, `mirror-upstream.mjs`, `release/*` (changeset + changelog tooling, copied from the notes app) | |
 | `tauri/` | The desktop shell (see below) | nothing from `src/` |
@@ -317,6 +317,47 @@ path identical to the real one apart from `Destination` and `Transport`.
 rules, which is how the Windows finish-the-install screen is seen (and shot)
 without a Windows machine.
 
+## The app updates itself, and keeps your answers
+
+A page that is open for an hour is running an hour-old installer, and "reload
+before you install" is advice nobody receives. So the web build polls its own
+`version.json` (emitted next to the bundle by `vite.config.ts`, fetched by
+`net/version.ts` with `no-store` and a cache-busting query — on load, every
+15 minutes while the tab is visible, and whenever it regains focus) and
+reloads itself when the deployed `BUILD_LABEL` differs from the running one.
+Rollbacks count: it is the deployed build that is right, not the higher
+number.
+
+**Reloading a wizard is only acceptable because nothing is lost.**
+`app/wizard.ts` writes the answers into `sessionStorage` on every change —
+mode, step, the whole `InstallOptions`, the folder, the name of a chosen
+`pak1.pak` — and reads them back at mount, so a refresh, a crashed tab or a
+self-update all resume mid-flow. Two decisions shape it, both in `domain/`:
+
+- **`session.ts` is written by one build and read by another.** Never trust
+  the blob: `parseSession` drops another `SESSION_SCHEMA` or anything over a
+  day old, and `sanitizeOptions` merges field by field over today's
+  `defaultOptions`, so a build that adds an option still reads a session
+  saved before it existed. The generated rcon / QTV passwords are kept (the
+  advanced step showed them; somebody may have written them down); the
+  `pak1.pak` `File` cannot be and `pak1` comes back false.
+- **`update.ts` decides when the page may go.** Never during a run —
+  `runInstall` writing files beats any fix. Never onto a finished install's
+  Done screen. When the reload would cost something a page cannot put back (a
+  File System Access handle, a picked `pak1.pak`) it is offered in a banner
+  instead of taken, as it is after a failed or cancelled run, where the new
+  build may be the fix. And the same build is only reached for
+  `MAX_RELOAD_ATTEMPTS` times: `version.json` and the HTML are cached
+  separately, so a deploy can be announced before it is served, and without
+  the count that gap is a reload loop.
+
+A restored folder is the one asymmetry between surfaces: the desktop app
+saves a path and reopens it, the simulation makes a new one, and a browser's
+handle dies with the page — so a web install that had already picked a folder
+comes back on the folder step and says so. `?fresh=1` ignores a saved
+session; `?update=off` stops the polling. The Tauri shell carries its own
+bundle and never polls.
+
 ## The desktop shell is thin
 
 `tauri/` embeds `dist/` (built with `npm run build:tauri` → relative base,
@@ -425,6 +466,15 @@ Conventional Commits; PRs squash-merge, so the PR title is the commit.
 - Firefox and Safari have no folder access, so they only get the
   simulation; a "download as zip" fallback (streaming a zip to the browser)
   is the obvious next surface behind the same seam.
+- The self-update has been driven in a real headless Chromium against two
+  actual builds: a `vite build`, a page filled in, a second `vite build` with
+  a different run number deployed under it, and the page coming back as the
+  new label with its answers and its step intact — plus the CDN case, where
+  `version.json` announces a build the server never serves and the page stops
+  after `MAX_RELOAD_ATTEMPTS` and offers it instead. What that cannot show is
+  the real GitHub Pages cache, where the HTML and `version.json` expire
+  independently: if the guard is going to be wrong about anything, it is
+  there, and the symptom is two reloads and a banner rather than a loop.
 - No uninstaller yet; `nquake-reborn.json` records what was written so one
   can be built without guessing.
 - English only; no i18n runtime. No service worker on purpose (an installer
@@ -442,6 +492,7 @@ Conventional Commits; PRs squash-merge, so the PR title is the commit.
 | Which distfiles paths the plan names | `nQuake/distfiles/AGENTS.md` (its "Paths are a contract" list) |
 | A distfiles change adding configs in a **new** game dir | `MOD_GAMEDIRS` in `domain/paths.ts` — otherwise a Windows web install quietly needs `nquake-finish.bat` again. `audit-catalog.mjs` fails on it |
 | The manifest or upstream index shape | `src/domain/manifest.ts` / `upstream.ts`, the generators (`distfiles/scripts/build-manifest.mjs`, `scripts/mirror-upstream.mjs`), and the `schema` number |
+| A field in `InstallOptions`, or anything else a reload has to carry | `sanitizeOptions` in `domain/session.ts` — a field it does not read comes back as the default. Bump `SESSION_SCHEMA` only when an old session can no longer be read at all |
 | Anything under `tauri/` | `tauri/README.md`, and re-read "The desktop shell is thin" |
 | A layer boundary, a surface capability or a debugging recipe | `.agents/skills/debug/SKILL.md` |
 | Release / deploy flow | "Deploy, release, changelog" above |

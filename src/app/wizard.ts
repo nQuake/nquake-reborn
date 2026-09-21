@@ -11,7 +11,7 @@ import {
   useState,
 } from "preact/hooks";
 
-import { APP_VERSION } from "../build-env.ts";
+import { APP_VERSION, BUILD_LABEL } from "../build-env.ts";
 import type { Manifest } from "../domain/manifest.ts";
 import {
   defaultOptions,
@@ -22,6 +22,14 @@ import {
 } from "../domain/options.ts";
 import type { Platform } from "../domain/platform.ts";
 import { buildPlan, type InstallPlan } from "../domain/plan.ts";
+import {
+  captureSession,
+  folderIsRestorable,
+  type SaveReason,
+  type SavedFolder,
+  type SavedSession,
+  type WizardMode,
+} from "../domain/session.ts";
 import type { Upstream } from "../domain/upstream.ts";
 import {
   DEFAULT_CONCURRENCY,
@@ -41,6 +49,11 @@ import {
 import type { NameRules } from "../domain/paths.ts";
 import { MockDestination, createMockTransport } from "../platform/mock.ts";
 import type { StepInfo } from "../ui/Stepper.tsx";
+import {
+  clearSavedSession,
+  readSavedSession,
+  writeSavedSession,
+} from "./session-store.ts";
 
 export type StepId =
   | "welcome"
@@ -69,8 +82,11 @@ const STEP_LABELS: Record<StepId, string> = {
  * Simple mode is Next, Next, Next on the defaults in `defaultOptions`
  * (QuakeWorld's standard ports, the newest ezQuake, the 24-bit textures,
  * WASD). Advanced mode adds the steps that let you change any of it.
+ *
+ * The type itself lives in `domain/session.ts`, with the rest of what a
+ * reload has to carry.
  */
-export type WizardMode = "simple" | "advanced";
+export type { WizardMode };
 
 export function stepsFor(
   options: InstallOptions,
@@ -125,6 +141,14 @@ export interface WizardCtx {
   startInstall: () => void;
   cancelInstall: () => void;
   reset: () => void;
+  /**
+   * The session this page load picked up where a previous one left off, if
+   * any — the app reloads itself when a newer build is deployed, and this is
+   * what came back across that reload.
+   */
+  restored: SavedSession | null;
+  /** Write the answers down now. The last thing that happens before a reload. */
+  saveNow: (reason: SaveReason, target?: string | null) => void;
   steps: (StepInfo & { id: StepId })[];
   stepIndex: number;
   step: StepId;
@@ -145,6 +169,8 @@ function readQuery(): {
   theme: string | null;
   mode: WizardMode | null;
   names: NameRules | null;
+  fresh: boolean;
+  update: boolean;
 } {
   const q = new URLSearchParams(window.location.search);
   const p = q.get("platform");
@@ -159,6 +185,11 @@ function readQuery(): {
     // Windows refuses — the only way to see that install without one.
     names:
       n === "browser" || n === "browser-windows" || n === "none" ? n : null,
+    // `?fresh=1` ignores a saved session; `?update=off` stops the app
+    // reloading itself. Both exist for debugging the two things that are
+    // otherwise hard to observe from the outside.
+    fresh: q.get("fresh") === "1",
+    update: q.get("update") !== "off",
   };
 }
 
@@ -171,15 +202,91 @@ export const QUERY =
         theme: null,
         mode: null,
         names: null,
+        fresh: false,
+        update: true,
       };
+
+/**
+ * Where a restored session picks back up. The step is looked up by id rather
+ * than by number, because the build that saved it may have had a different
+ * list of steps; and two steps are never restored into:
+ *
+ * - `install` and `done` describe a run that this page load is not doing, so
+ *   they fall back to review, with every answer still filled in;
+ * - anything past `folder` when the folder itself could not be reopened —
+ *   a browser's folder handle dies with the page, so the one thing the user
+ *   has to do again is the one thing the wizard puts them back in front of.
+ */
+export function restoredStepIndex(
+  steps: { id: StepId }[],
+  savedStep: string,
+  opts: { folderRestorable: boolean },
+): number {
+  const saved = steps.findIndex((s) => s.id === savedStep);
+  if (saved < 0) return 0;
+  const install = steps.findIndex((s) => s.id === "install");
+  let index = install > 0 ? Math.min(saved, install - 1) : saved;
+  if (!opts.folderRestorable) {
+    const folder = steps.findIndex((s) => s.id === "folder");
+    if (folder >= 0) index = Math.min(index, folder);
+  }
+  return index;
+}
+
+/**
+ * Whether a saved folder comes back on *this* surface. `folderIsRestorable`
+ * answers it for the folder alone; this adds the page load's own side of it,
+ * since a simulated folder saved under `?mock=1` means nothing to a tab that
+ * can write for real, and a path means nothing outside the desktop app.
+ */
+function folderComesBack(
+  saved: SavedFolder | null,
+  caps: Capabilities,
+): boolean {
+  if (!saved) return true;
+  if (!folderIsRestorable(saved)) return false;
+  if (saved.kind === "mock") return !caps.realInstall;
+  return caps.surface === "tauri";
+}
+
+/** Reopen a folder a previous page load had picked, where that is possible. */
+async function reopenFolder(
+  saved: SavedFolder,
+  caps: Capabilities,
+): Promise<Destination | null> {
+  if (saved.kind === "mock") {
+    // Only if this page load is still simulating; `?mock=1` may be gone.
+    return caps.realInstall ? null : mockDestination();
+  }
+  if (saved.kind === "tauri" && saved.path && caps.surface === "tauri") {
+    const { TauriDestination } = await import("../platform/tauri.ts");
+    return new TauriDestination(saved.path);
+  }
+  // A File System Access handle exists only for the life of the page that was
+  // granted it, so there is nothing here to reopen.
+  return null;
+}
 
 export function useWizard(caps: Capabilities): WizardCtx {
   const initialPlatform = QUERY.platform ?? caps.platform ?? "windows";
+  // Read once, at mount, before the autosave below writes over it. State
+  // rather than a memo so "start over" can forget it was ever restored.
+  const [restored, setRestored] = useState<SavedSession | null>(() =>
+    QUERY.fresh ? null : readSavedSession(initialPlatform),
+  );
   const [options, setOptionsState] = useState<InstallOptions>(() => {
-    const o = defaultOptions(initialPlatform);
-    o.server.rconPassword = randomPassword();
-    o.server.qtvPassword = randomPassword();
-    return o;
+    const base = restored?.options ?? defaultOptions(initialPlatform);
+    return {
+      ...base,
+      server: {
+        ...base.server,
+        // Kept across a reload when there is one: the advanced server step
+        // shows the rcon and QTV passwords, and somebody may already have
+        // written them down. Generated only when there is nothing to keep.
+        rconPassword: base.server.rconPassword || randomPassword(),
+        qtvPassword: base.server.qtvPassword || randomPassword(),
+      },
+    };
   });
   const setOptions = useCallback(
     (update: (o: InstallOptions) => InstallOptions) =>
@@ -254,10 +361,40 @@ export function useWizard(caps: Capabilities): WizardCtx {
     setOptionsState((o) => ({ ...o, pak1: f !== null }));
   }, []);
 
+  // A folder the previous page load had chosen, where the surface knows it
+  // well enough to open it again (see `reopenFolder`). Once, on mount.
+  const restoredFolder = restored?.folder ?? null;
+  useEffect(() => {
+    if (!restoredFolder || !folderComesBack(restoredFolder, caps)) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const dest = await reopenFolder(restoredFolder, caps);
+        if (!dest || cancelled) return;
+        await chooseFolder(dest);
+        if (!cancelled) setUseSubfolder(restoredFolder.useSubfolder);
+      } catch {
+        // The folder moved, or the app cannot read it any more; the folder
+        // step will ask for it again.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [restoredFolder, caps, chooseFolder, setUseSubfolder]);
+
   // ---- Steps
-  const [mode, setMode] = useState<WizardMode>(QUERY.mode ?? "simple");
+  const [mode, setMode] = useState<WizardMode>(
+    QUERY.mode ?? restored?.mode ?? "simple",
+  );
   const steps = useMemo(() => stepsFor(options, mode), [options, mode]);
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(() =>
+    restored
+      ? restoredStepIndex(steps, restored.step, {
+          folderRestorable: folderComesBack(restored.folder, caps),
+        })
+      : 0,
+  );
   const clamped = Math.min(stepIndex, steps.length - 1);
   const step = steps[clamped]?.id ?? "welcome";
   const next = useCallback(() => {
@@ -272,6 +409,40 @@ export function useWizard(caps: Capabilities): WizardCtx {
     setStepIndex(index);
     window.scrollTo({ top: 0 });
   }, []);
+
+  // ---- Saving the answers
+  //
+  // Written on every change rather than only on the way into an update: a
+  // reload we did not start (a refresh, a crashed tab, a laptop lid) costs
+  // the user the same typing, and `sessionStorage` is a few hundred bytes
+  // and a synchronous write.
+  const saveNow = useCallback(
+    (reason: SaveReason, target?: string | null) => {
+      writeSavedSession(
+        captureSession({
+          build: BUILD_LABEL,
+          reason,
+          target: target ?? null,
+          mode,
+          // A run is not a saved answer. Coming back to the review step with
+          // everything filled in is what a restored install looks like.
+          step: step === "install" || step === "done" ? "review" : step,
+          options,
+          folder: folder
+            ? {
+                kind: folder.picked.kind,
+                path: folder.picked.path ?? null,
+                name: folder.picked.name,
+                useSubfolder: folder.useSubfolder,
+              }
+            : null,
+          pak1Name: pak1?.name ?? null,
+        }),
+      );
+    },
+    [mode, step, options, folder, pak1],
+  );
+  useEffect(() => saveNow("autosave"), [saveNow]);
 
   // ---- Install run
   const [run, setRun] = useState<InstallRunState>({
@@ -359,6 +530,10 @@ export function useWizard(caps: Capabilities): WizardCtx {
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
+    // Starting over means starting over: the autosave effect writes the fresh
+    // state back a tick later, so nothing stale survives.
+    clearSavedSession();
+    setRestored(null);
     setRun({ status: "idle", progress: null, log: [], result: null });
     setFolder(null);
     setPak1State(null);
@@ -392,6 +567,8 @@ export function useWizard(caps: Capabilities): WizardCtx {
     startInstall,
     cancelInstall,
     reset,
+    restored,
+    saveNow,
     steps,
     stepIndex: clamped,
     step,

@@ -16,7 +16,7 @@ export interface MovementKeys {
 }
 
 export interface ClientConfig {
-  /** In-game nickname (`name` cvar). */
+  /** In-game nickname (`name` cvar). Required; empty until the user types one. */
   name: string;
   invertMouse: boolean;
   layout: KeyLayout;
@@ -116,8 +116,9 @@ export function defaultOptions(platform: Platform): InstallOptions {
       teamFortress: false,
       clanArena: false,
       config: {
-        // ezQuake's own default; changeable in-game with /name.
-        name: "player",
+        // Deliberately empty: the wizard asks for a nickname and will not
+        // move on without one, so nobody joins a server as "player".
+        name: "",
         invertMouse: false,
         layout: "wasd",
         keys: { ...KEY_LAYOUTS.wasd },

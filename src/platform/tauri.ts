@@ -23,12 +23,38 @@ function joinPath(root: string, path: string): string {
   return rel ? `${root.replace(/[\\/]+$/, "")}${sep}${rel}` : root;
 }
 
+/**
+ * `$HOME/nquake` — where nQuake has always gone, and what the folder step
+ * offers so the desktop app can be Next, Next, Next. Nothing is created
+ * here: the directory appears when the install first writes into it, so
+ * picking a different folder afterwards leaves no empty one behind.
+ */
+export async function defaultTauriPath(): Promise<string> {
+  const { homeDir, join } = await import("@tauri-apps/api/path");
+  return join(await homeDir(), "nquake");
+}
+
+export async function defaultTauriDestination(): Promise<TauriDestination> {
+  return new TauriDestination(await defaultTauriPath());
+}
+
+async function homeDirOrNothing(): Promise<string | undefined> {
+  try {
+    const { homeDir } = await import("@tauri-apps/api/path");
+    return await homeDir();
+  } catch {
+    return undefined;
+  }
+}
+
 export async function pickTauriDestination(): Promise<TauriDestination | null> {
   const { open } = await import("@tauri-apps/plugin-dialog");
   const picked = await open({
     directory: true,
     multiple: false,
     title: "Choose where to install nQuake",
+    // Open where the default lives, not wherever the OS last left the dialog.
+    defaultPath: await homeDirOrNothing(),
   });
   if (!picked || Array.isArray(picked)) return null;
   return new TauriDestination(picked);
@@ -47,6 +73,11 @@ export class TauriDestination implements Destination {
   readonly nameRules = "none" as const;
 
   constructor(readonly root: string) {}
+
+  /** The desktop app knows where the folder is, so the wizard can show it. */
+  get path(): string {
+    return this.root;
+  }
 
   get name(): string {
     const parts = this.root.split(/[\\/]+/).filter(Boolean);
@@ -95,9 +126,12 @@ export class TauriDestination implements Destination {
   async openWrite(path: string): Promise<WritableStream<Uint8Array>> {
     const { mkdir, open } = await fs();
     const { dirs } = splitPath(path);
-    if (dirs.length) {
-      await mkdir(joinPath(this.root, dirs.join("/")), { recursive: true });
-    }
+    // Always `recursive`, including for the root itself: the folder step can
+    // hand us a path that does not exist yet (the `~/nquake` default), and a
+    // file at the top level has no parent of its own to create.
+    await mkdir(dirs.length ? joinPath(this.root, dirs.join("/")) : this.root, {
+      recursive: true,
+    });
     const file = await open(joinPath(this.root, path), {
       write: true,
       create: true,

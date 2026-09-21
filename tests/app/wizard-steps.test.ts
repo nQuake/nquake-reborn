@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { stepsFor } from "../../src/app/wizard.ts";
-import { defaultOptions } from "../../src/domain/options.ts";
+import {
+  canProceed,
+  hasNickname,
+  stepsFor,
+  type WizardCtx,
+} from "../../src/app/wizard.ts";
+import {
+  defaultOptions,
+  type InstallOptions,
+} from "../../src/domain/options.ts";
 
 describe("stepsFor", () => {
   it("is Next-Next-Next in simple mode", () => {
@@ -44,5 +52,40 @@ describe("stepsFor", () => {
     expect(o.server.binariesSource).toBe("latest");
     expect(o.client.textures).toBe(true);
     expect(o.client.config.keys.forward).toBe("w");
+  });
+
+  it("ships no nickname — the user has to type one", () => {
+    expect(defaultOptions("linux").client.config.name).toBe("");
+  });
+});
+
+describe("the nickname is obligatory", () => {
+  // Only the two fields `canProceed` looks at for these steps.
+  const ctx = (step: "target" | "config", o: InstallOptions, mode = "simple") =>
+    ({ step, options: o, mode }) as unknown as WizardCtx;
+
+  it("blocks the simple target step until one is entered", () => {
+    const o = defaultOptions("linux");
+    expect(hasNickname(o)).toBe(false);
+    expect(canProceed(ctx("target", o))).toBe(false);
+    o.client.config.name = "  ";
+    expect(canProceed(ctx("target", o))).toBe(false);
+    o.client.config.name = "empezar";
+    expect(canProceed(ctx("target", o))).toBe(true);
+  });
+
+  it("asks on the config step instead in advanced mode", () => {
+    const o = defaultOptions("linux");
+    // Advanced has its own nickname field further on, so target itself is fine.
+    expect(canProceed(ctx("target", o, "advanced"))).toBe(true);
+    expect(canProceed(ctx("config", o, "advanced"))).toBe(false);
+    o.client.config.name = "empezar";
+    expect(canProceed(ctx("config", o, "advanced"))).toBe(true);
+  });
+
+  it("does not ask a server-only install", () => {
+    const o = defaultOptions("linux");
+    o.target = "server";
+    expect(canProceed(ctx("target", o))).toBe(true);
   });
 });

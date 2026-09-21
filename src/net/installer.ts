@@ -41,6 +41,17 @@ export interface ItemProgress {
   error?: string;
 }
 
+/** One line of the install's running log: a file that just settled. */
+export interface FinishedItem {
+  dest: string;
+  status: "done" | "skipped" | "failed";
+  size: number;
+  at: number;
+}
+
+/** How many finished files the progress feed carries — a screenful or two. */
+export const RECENT_LIMIT = 60;
+
 export interface InstallProgress {
   bytesDone: number;
   bytesTotal: number;
@@ -51,6 +62,13 @@ export interface InstallProgress {
   /** Seconds remaining, null until measurable. */
   eta: number | null;
   active: string[];
+  /**
+   * The files that have just finished, oldest first, capped at
+   * `RECENT_LIMIT`. `items` is keyed by destination and in plan order, which
+   * says what happened but not *when*; this is the order things actually
+   * landed, which is what the install screen shows as a log.
+   */
+  recent: FinishedItem[];
   items: ReadonlyMap<string, ItemProgress>;
 }
 
@@ -168,6 +186,16 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
   let bytesDone = 0;
   let filesDone = 0;
   const active = new Set<string>();
+  const recent: FinishedItem[] = [];
+  const finished = (
+    dest: string,
+    status: FinishedItem["status"],
+    size: number,
+  ) => {
+    recent.push({ dest, status, size, at: now() });
+    if (recent.length > RECENT_LIMIT)
+      recent.splice(0, recent.length - RECENT_LIMIT);
+  };
   let lastEmit = 0;
 
   const log = (level: InstallLogEntry["level"], message: string) =>
@@ -185,6 +213,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       rate: meter.rate(t),
       eta: meter.eta(bytesTotal - bytesDone, t),
       active: [...active],
+      recent: [...recent],
       items,
     });
   };
@@ -294,6 +323,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       filesDone++;
       bytesDone += it.size;
       setItem(it, { status: "skipped", bytes: it.size });
+      finished(it.dest, "skipped", it.size);
       emit();
       return;
     }
@@ -343,6 +373,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       written++;
       filesDone++;
       setItem(it, { status: "done", bytes: it.size });
+      finished(it.dest, "done", it.size);
     } catch (e) {
       if (signal?.aborted) {
         setItem(it, { status: "pending", bytes: 0 });
@@ -352,6 +383,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       failed.push({ item: it, error: message });
       filesDone++;
       setItem(it, { status: "failed", error: message });
+      finished(it.dest, "failed", it.size);
       log("error", `${it.dest}: ${message}`);
     } finally {
       active.delete(it.dest);

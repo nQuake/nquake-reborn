@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { Manifest } from "../../src/domain/manifest.ts";
 import { defaultOptions } from "../../src/domain/options.ts";
 import { buildPlan } from "../../src/domain/plan.ts";
-import { runInstall } from "../../src/net/installer.ts";
+import {
+  RECENT_LIMIT,
+  runInstall,
+  type FinishedItem,
+} from "../../src/net/installer.ts";
 import {
   createHttpTransport,
   type Transport,
@@ -135,6 +139,34 @@ describe("runInstall", () => {
     expect(last).toBe(plan.totalBytes);
   });
 
+  it("feeds the install screen a log of what just landed", async () => {
+    const options = defaultOptions("windows");
+    options.client.config.name = "empezar";
+    const plan = buildPlan(manifest, null, options);
+    let recent: FinishedItem[] = [];
+    await runInstall({
+      plan,
+      options,
+      manifest,
+      destination: new MockDestination(),
+      transport: fakeTransport(() => NaN),
+      installerVersion: "0.1.0",
+      // The last emit is forced, so it carries the tail of the run.
+      onProgress: (p) => {
+        recent = p.recent;
+      },
+    });
+    expect(recent.length).toBeGreaterThan(0);
+    expect(recent.length).toBeLessThanOrEqual(RECENT_LIMIT);
+    // In the order things actually finished, and every one a real plan item.
+    const dests = new Set(plan.items.map((i) => i.dest));
+    for (const f of recent) expect(dests.has(f.dest)).toBe(true);
+    expect(recent.map((f) => f.at)).toEqual(
+      [...recent.map((f) => f.at)].sort((a, b) => a - b),
+    );
+    expect(recent.every((f) => f.status === "done")).toBe(true);
+  });
+
   it("collects failures and short downloads instead of aborting", async () => {
     const options = defaultOptions("windows");
     const plan = buildPlan(manifest, null, options);
@@ -249,6 +281,7 @@ describe("runInstall", () => {
       },
     };
     const options = defaultOptions("windows");
+    options.client.config.name = "empezar";
     const plan = buildPlan(withConfigs, null, options);
     const dest = new MockDestination("browser", "browser-windows");
     const logs: string[] = [];
@@ -292,7 +325,7 @@ describe("runInstall", () => {
     ]);
     expect(
       new TextDecoder().decode(entries.get("configs/preset.cfg")),
-    ).toContain('name "player"');
+    ).toContain('name "empezar"');
 
     // The record still names the real destination, not the archive.
     const state = JSON.parse((await dest.readText("nquake-reborn.json"))!);

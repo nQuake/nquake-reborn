@@ -31,3 +31,65 @@ export class RateMeter {
     return remaining / r;
   }
 }
+
+/**
+ * What one file costs: a fixed overhead — an HTTPS round trip to the CDN,
+ * then creating and closing the file — plus a per-byte transfer cost. Both
+ * are fitted by least squares over the files that most recently finished.
+ *
+ * An nQuake install needs both terms to estimate anything useful, because it
+ * is two different workloads in a row. The queue runs largest first: ~70
+ * files carry nearly all of the ~180 MB, and then ~450 more carry almost no
+ * bytes at all but one round trip each. An ETA made of bytes and measured
+ * bandwidth alone — which is what this replaced — reads fine for the first
+ * half and then claims "16 minutes left" for the twenty seconds of round
+ * trips that are actually left, because throughput in bytes collapses when
+ * the work stops being about bytes.
+ *
+ * Durations are measured with the pool running, so they already include
+ * whatever contention `concurrency` workers cause each other; dividing the
+ * fitted total by the same concurrency takes it back out again.
+ */
+export class FileCostMeter {
+  private samples: { bytes: number; ms: number }[] = [];
+
+  constructor(private window = 60) {}
+
+  /** Record a file that finished: how big it was and how long it took. */
+  add(bytes: number, ms: number): void {
+    this.samples.push({ bytes: Math.max(0, bytes), ms: Math.max(0, ms) });
+    if (this.samples.length > this.window) {
+      this.samples.splice(0, this.samples.length - this.window);
+    }
+  }
+
+  /**
+   * Seconds to finish `files` files totalling `bytes` at this concurrency,
+   * or null while there is too little to fit a line to.
+   */
+  estimate(files: number, bytes: number, concurrency: number): number | null {
+    const n = this.samples.length;
+    if (n < 3) return null;
+    if (files <= 0) return 0;
+    let sx = 0;
+    let sy = 0;
+    for (const s of this.samples) {
+      sx += s.bytes;
+      sy += s.ms;
+    }
+    const mx = sx / n;
+    const my = sy / n;
+    let sxx = 0;
+    let sxy = 0;
+    for (const s of this.samples) {
+      sxx += (s.bytes - mx) ** 2;
+      sxy += (s.bytes - mx) * (s.ms - my);
+    }
+    // Per byte, then per file: a run of equal-sized files says nothing about
+    // the slope, so it all becomes overhead rather than a wild extrapolation.
+    const perByte = sxx > 0 ? Math.max(0, sxy / sxx) : 0;
+    const perFile = Math.max(0, my - perByte * mx);
+    const ms = files * perFile + perByte * Math.max(0, bytes);
+    return ms / Math.max(1, concurrency) / 1000;
+  }
+}

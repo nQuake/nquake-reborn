@@ -26,7 +26,7 @@ import {
   type InstallPlan,
   type PlanItem,
 } from "../domain/plan.ts";
-import { RateMeter } from "../domain/progress.ts";
+import { FileCostMeter, RateMeter } from "../domain/progress.ts";
 import { renderInstallReadme } from "../domain/readme.ts";
 import { wantsClient } from "../domain/options.ts";
 import type { Destination } from "../platform/destination.ts";
@@ -51,6 +51,16 @@ export interface FinishedItem {
 
 /** How many finished files the progress feed carries — a screenful or two. */
 export const RECENT_LIMIT = 60;
+
+/**
+ * Files in flight at once. Every download is an HTTP/2 stream to the same
+ * CDN host, not a separate connection, so this is not the old six-per-host
+ * browser limit; it is how much round-trip latency the tail of the install
+ * can hide. A client install is ~520 files of which ~450 are small, and at
+ * ~150 ms per request that tail costs `450 × 0.15 / concurrency` seconds
+ * either way.
+ */
+export const DEFAULT_CONCURRENCY = 12;
 
 export interface InstallProgress {
   bytesDone: number;
@@ -133,9 +143,15 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     installerVersion,
   } = args;
   const now = args.now ?? (() => Date.now());
-  const concurrency = args.concurrency ?? 6;
+  // raw.githubusercontent.com is HTTP/2, so these are streams on one
+  // connection rather than sockets, and the tail of the install is ~450 small
+  // files whose cost is a round trip each: what decides how long that takes
+  // is how many are in flight at once. Six was the old browser-era
+  // per-host limit and left the CDN idle.
+  const concurrency = args.concurrency ?? DEFAULT_CONCURRENCY;
   const started = now();
   const meter = new RateMeter();
+  const cost = new FileCostMeter();
 
   // Names this surface will not create. A browser refuses `.url` (nQuake's
   // `ezquake/Online Manual.url` shortcut) everywhere, and on Windows it
@@ -176,6 +192,8 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
   let fixupScript: string | null = null;
   const archives: string[] = [];
   const bytesTotal = planItems.reduce((n, it) => n + it.size, 0);
+  // How many downloads are really in flight — the ETA divides by it.
+  const poolSize = Math.max(1, Math.min(concurrency, planItems.length));
 
   const items = new Map<string, ItemProgress>();
   for (const it of planItems)
@@ -211,7 +229,14 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       filesDone,
       filesTotal: planItems.length,
       rate: meter.rate(t),
-      eta: meter.eta(bytesTotal - bytesDone, t),
+      // Bytes alone cannot estimate the round-trip-bound tail; `cost` fits
+      // both halves. It needs a few finished files before it says anything.
+      eta:
+        cost.estimate(
+          planItems.length - filesDone,
+          bytesTotal - bytesDone,
+          poolSize,
+        ) ?? meter.eta(bytesTotal - bytesDone, t),
       active: [...active],
       recent: [...recent],
       items,
@@ -315,6 +340,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
 
   const installOne = async (it: PlanItem) => {
     if (signal?.aborted) return;
+    const startedAt = now();
     const existing = archiveOf.has(it.dest)
       ? null
       : await destination.stat(pathFor(it.dest));
@@ -324,6 +350,10 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       bytesDone += it.size;
       setItem(it, { status: "skipped", bytes: it.size });
       finished(it.dest, "skipped", it.size);
+      // A reused file costs one `stat`, whatever its size. Feeding those in
+      // too is what keeps the estimate honest when most of an update is
+      // already on disk: the files still to come are probably just as cheap.
+      cost.add(it.size, now() - startedAt);
       emit();
       return;
     }
@@ -374,6 +404,9 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       filesDone++;
       setItem(it, { status: "done", bytes: it.size });
       finished(it.dest, "done", it.size);
+      // A failure is four attempts and backoff, which says nothing about what
+      // the rest will cost, so only files that worked are sampled.
+      cost.add(it.size, now() - startedAt);
     } catch (e) {
       if (signal?.aborted) {
         setItem(it, { status: "pending", bytes: 0 });
@@ -395,15 +428,12 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
   // 100 MB texture pack downloading alone.
   const queue = [...planItems].sort((a, b) => b.size - a.size);
   let index = 0;
-  const workers = Array.from(
-    { length: Math.min(concurrency, queue.length) },
-    async () => {
-      while (index < queue.length && !signal?.aborted) {
-        const it = queue[index++]!;
-        await installOne(it);
-      }
-    },
-  );
+  const workers = Array.from({ length: poolSize }, async () => {
+    while (index < queue.length && !signal?.aborted) {
+      const it = queue[index++]!;
+      await installOne(it);
+    }
+  });
   await Promise.all(workers);
 
   const cancelled = signal?.aborted ?? false;

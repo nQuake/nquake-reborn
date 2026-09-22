@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "preact/hooks";
 
-import { BUILD_LABEL } from "../build-env.ts";
+import { BUILD_COMMIT, BUILD_LABEL, REPO_URL } from "../build-env.ts";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -197,32 +197,37 @@ export function App({ caps }: { caps: Capabilities }) {
         )}
       </main>
 
-      <footer className="mx-auto w-full max-w-5xl px-4 pb-6 text-xs text-muted sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-line-strong pt-4">
-          <span>
-            nQuake by Empezar and the QuakeWorld community · web installer{" "}
-            <span className="font-mono">v{BUILD_LABEL}</span>
-          </span>
-          <span className="flex gap-4">
-            <a className="hover:text-fg" href="https://www.nquake.com/">
-              nquake.com
-            </a>
-            <a
-              className="hover:text-fg"
-              href="https://github.com/nQuake/distfiles"
-            >
-              distribution files
-            </a>
-            <a
-              className="hover:text-fg"
-              href="https://github.com/nQuake/web-installer/blob/main/LICENSE"
-            >
-              GPL-2.0
-            </a>
-          </span>
-        </div>
+      {/* The whole footer is one line: which build you are looking at, linked
+          at the commit it was built from. A bug report that carries this is a
+          bug report you can check out. */}
+      <footer className="mx-auto w-full max-w-5xl px-4 pb-6 text-center text-xs text-muted sm:px-6">
+        <BuildStamp />
       </footer>
     </div>
+  );
+}
+
+/**
+ * `v0.2.0.15+8f4022d` — the deployed build label and the commit it was built
+ * from, linked at that commit on GitHub. A build with no git and no
+ * `GITHUB_SHA` behind it (a source tarball) has no hash to show and no commit
+ * to link at, so it stays plain text.
+ */
+function BuildStamp() {
+  const short = BUILD_COMMIT.slice(0, 7);
+  const label = `v${BUILD_LABEL}${short ? `+${short}` : ""}`;
+  if (!short) return <span className="font-mono">{label}</span>;
+  return (
+    <a
+      className="font-mono hover:text-fg"
+      href={`${REPO_URL}/commit/${BUILD_COMMIT}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Built from ${BUILD_COMMIT}`}
+      data-testid="build-stamp"
+    >
+      {label}
+    </a>
   );
 }
 

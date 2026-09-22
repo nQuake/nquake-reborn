@@ -47,10 +47,11 @@ describe("renderPresetCfg", () => {
     const cfg = renderPresetCfg(o.client.config, "linux");
     expect(cfg).toContain('name "terryb"');
     expect(cfg).toContain('cl_fakename "ter"');
-    // It only wins because preset.cfg is exec'd after nquake_default.cfg,
-    // which is worth a comment in a file a player will open one day.
-    expect(cfg).toMatch(/\/\/ Team messages \(say_team\)/);
-    expect(cfg).toContain("PLA:");
+    // The cvar does not follow `name`, so the file says so on one line —
+    // it is read in a text editor, next to 150 other lines of config.
+    expect(cfg).toContain(
+      "// Prefixes your team messages. Change it too if you change your name.",
+    );
 
     // An empty nickname falls back to the default, abbreviated the same way.
     o.client.config.name = "   ";

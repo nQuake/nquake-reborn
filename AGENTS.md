@@ -457,8 +457,13 @@ Modelled on the notes app.
 - Dependabot watches npm (root and `tauri/`), cargo and actions weekly.
 
 Conventional Commits; PRs squash-merge, so the PR title is the commit.
-`BUILD_LABEL` (`<version>.<run>[-pre|-br]`) shows in the footer and
-`version.json`.
+`BUILD_LABEL` (`<version>.<run>[-pre|-br]`) goes into `version.json` — which
+is what the self-update compares — and into the footer, which is the whole
+footer: `v<label>+<commit>`, linked at that commit on GitHub. The commit is
+`__BUILD_COMMIT__`, from `GITHUB_SHA` or `git rev-parse` at build time
+(`vite.config.ts`), and a build that has neither shows the label alone. Don't
+put anything else down there: a screenshot of it should be enough to check
+out what the reporter was running.
 
 ## State of things / known follow-ups
 

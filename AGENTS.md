@@ -254,13 +254,16 @@ everyone with an existing install keeps the old file until they reinstall —
 so prefer fixing it in *both* places when the installer can also override it.
 But read the shipped file's intent before calling it broken. `cl_fakename` is
 the worked example of both halves: `nquake_default.cfg` sets it to `"pla"`,
-which looks like a leftover from `name "player"` and is deliberate — ezQuake
-rewrites every `say_team` as `<cl_fakename><suffix><message>`, so a short
-fakename is what leaves a team message's width for the message. The actual
-defect is narrower: nothing makes it follow a player who renames themselves.
-Only the installer knows the name, so `preset.cfg` writes it (new installs,
-immediately) and distfiles keeps its default, with a comment saying what it
-is for.
+which looks like a leftover from `name "player"` and is half deliberate —
+ezQuake rewrites every `say_team` as `\x0d<cl_fakename><suffix><message>` (the
+CR tells the server the message already has its prefix), so a *short* fakename
+is what leaves a team message's width for the message. The defect is narrower
+than "wrong value": nothing makes it follow a player who renames themselves.
+So the fix keeps the length and replaces the name — `preset.cfg` writes the
+first three characters of the installer's nickname, not the whole thing
+(which would be no narrower than the server's own prefix) and not `""` (which
+turns the cvar off and gives that prefix back). Only the installer knows the
+name; distfiles keeps its default, with a comment saying what it is for.
 
 ## The wizard
 

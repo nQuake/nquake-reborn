@@ -26,6 +26,12 @@ import { TargetStep } from "../ui/steps/TargetStep.tsx";
 import { WelcomeStep } from "../ui/steps/WelcomeStep.tsx";
 import type { Capabilities } from "../platform/capabilities.ts";
 import { useSelfUpdate, type SelfUpdate } from "./self-update.ts";
+import {
+  applyTextSize,
+  initialTextSize,
+  nextTextSize,
+  type TextSize,
+} from "./text-size.ts";
 import { applyTheme, initialTheme, type Theme } from "./theme.ts";
 import {
   QUERY,
@@ -71,6 +77,11 @@ export function App({ caps }: { caps: Capabilities }) {
   const ctx = useWizard(caps);
   const [theme, setTheme] = useState<Theme>(() => initialTheme(QUERY.theme));
   useEffect(() => applyTheme(theme), [theme]);
+  // Phones cannot pinch-zoom this page, so this is how the type gets bigger.
+  const [textSize, setTextSize] = useState<TextSize>(() =>
+    initialTextSize(QUERY.text),
+  );
+  useEffect(() => applyTextSize(textSize), [textSize]);
 
   // Keep the page on the newest deploy. The desktop app carries its own
   // bundle, so there is nothing for it to fetch.
@@ -108,6 +119,7 @@ export function App({ caps }: { caps: Capabilities }) {
           </span>
         </a>
         <div className="flex items-center gap-1">
+          <TextSizeButton size={textSize} onChange={setTextSize} />
           <button
             type="button"
             aria-label={
@@ -211,6 +223,46 @@ export function App({ caps }: { caps: Capabilities }) {
         </div>
       </footer>
     </div>
+  );
+}
+
+/**
+ * Small / medium / large, cycled by one button — the replacement for the
+ * pinch-zoom the page turns off on phones. The two A's show where you are:
+ * the right-hand one is drawn at the size you picked.
+ */
+function TextSizeButton({
+  size,
+  onChange,
+}: {
+  size: TextSize;
+  onChange: (s: TextSize) => void;
+}) {
+  const next = nextTextSize(size);
+  return (
+    <button
+      type="button"
+      aria-label={`Text size: ${size}. Switch to ${next}.`}
+      title={`Text size: ${size}`}
+      data-testid="text-size"
+      onClick={() => onChange(next)}
+      className="focus-ring inline-flex h-9 cursor-pointer items-center justify-center rounded-md px-2 text-muted hover:bg-surface-2 hover:text-fg"
+    >
+      <span className="flex items-baseline gap-0.5">
+        <span className="display text-[0.8rem] leading-none">A</span>
+        <span
+          className={`display leading-none ${
+            size === "small"
+              ? "text-[1rem]"
+              : size === "medium"
+                ? "text-[1.25rem]"
+                : "text-[1.5rem]"
+          }`}
+        >
+          A
+        </span>
+      </span>
+    </button>
   );
 }
 

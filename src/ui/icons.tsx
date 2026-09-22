@@ -126,3 +126,9 @@ export const RocketIcon = (p: Props) => (
     <circle cx="12" cy="9" r="1.2" />
   </Svg>
 );
+export const CopyIcon = (p: Props) => (
+  <Svg {...p}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M6 15H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1" />
+  </Svg>
+);

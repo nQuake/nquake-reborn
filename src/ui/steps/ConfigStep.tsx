@@ -8,7 +8,14 @@ import {
   type KeyLayout,
   type MovementKeys,
 } from "../../domain/options.ts";
-import { ChoiceCard, Field, SectionTitle, Toggle } from "../primitives.tsx";
+import {
+  ChoiceCard,
+  Field,
+  RequiredMark,
+  SectionTitle,
+  Toggle,
+} from "../primitives.tsx";
+import { useFlaggedField } from "../use-flagged-field.ts";
 
 const LAYOUTS: { id: KeyLayout; title: string; description: string }[] = [
   { id: "wasd", title: "WASD", description: "The modern default." },
@@ -33,6 +40,11 @@ export function ConfigStep({ ctx }: { ctx: WizardCtx }) {
   const { options, setOptions } = ctx;
   const cfg = options.client.config;
   const [nickTouched, setNickTouched] = useState(false);
+  const nickMissing = !cfg.name.trim();
+  const nickError = (nickTouched || ctx.flagged) && nickMissing;
+  // Pressing Next with the field empty brings the user here rather than
+  // doing nothing.
+  const nickRef = useFlaggedField<HTMLInputElement>(ctx.flagged && nickMissing);
   const setCfg = (patch: Partial<typeof cfg>) =>
     setOptions((o) => ({
       ...o,
@@ -50,16 +62,18 @@ export function ConfigStep({ ctx }: { ctx: WizardCtx }) {
     <div className="flex flex-col gap-8">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
-          label="Nickname"
-          htmlFor="nickname"
-          hint="Required. Your in-game name — later, /name changes it, and /cl_fakename, which is what prefixes your team messages."
-          error={
-            nickTouched && !cfg.name.trim()
-              ? "Enter a nickname to continue."
-              : null
+          label={
+            <>
+              Player name
+              <RequiredMark />
+            </>
           }
+          htmlFor="nickname"
+          hint="Your in-game name — later, /name changes it, and /cl_fakename, which is what prefixes your team messages."
+          error={nickError ? "Enter a player name to continue." : null}
         >
           <input
+            ref={nickRef}
             id="nickname"
             className="input"
             data-testid="nickname"
@@ -68,6 +82,7 @@ export function ConfigStep({ ctx }: { ctx: WizardCtx }) {
             placeholder="Your nickname"
             required
             aria-required="true"
+            aria-invalid={nickError}
             autoComplete="nickname"
             onBlur={() => setNickTouched(true)}
             onInput={(e) =>

@@ -11,14 +11,19 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <meta name="color-scheme" content="dark light" />
+    <!-- The colour the browser tints its own chrome with (Safari's address
+         bar, and the toolbar at the bottom of a phone): `--surface`, the bar
+         the Next button sits in, so the two meet without a seam. These two
+         follow the OS for the first paint only — `src/app/theme.ts` replaces
+         them with one that follows the header's theme toggle. -->
     <meta
       name="theme-color"
-      content="#0f0d0b"
+      content="#303030"
       media="(prefers-color-scheme: dark)"
     />
     <meta
       name="theme-color"
-      content="#f4efe8"
+      content="#ffffff"
       media="(prefers-color-scheme: light)"
     />
     <meta name="referrer" content="strict-origin-when-cross-origin" />

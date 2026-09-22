@@ -126,6 +126,27 @@ export const RocketIcon = (p: Props) => (
     <circle cx="12" cy="9" r="1.2" />
   </Svg>
 );
+
+// The three platform glyphs. Each is the mark that OS is known by, drawn on
+// the same 24-unit grid as the rest: Windows' four panes, Apple's apple, and
+// a Tux-shaped penguin for Linux. Filled rather than stroked — at 1em these
+// read as logos, and an outline penguin is a smudge.
+export const WindowsIcon = (p: Props) => (
+  <Svg {...p} stroke="none" fill="currentColor">
+    <path d="M3 5.6l7.6-1.05v7.2H3zM11.6 4.4L21 3.1v8.65h-9.4zM3 12.75h7.6v7.2L3 18.9zM11.6 12.75H21v8.65l-9.4-1.3z" />
+  </Svg>
+);
+export const AppleIcon = (p: Props) => (
+  <Svg {...p} stroke="none" fill="currentColor">
+    <path d="M16.3 12.7c0-2.2 1.8-3.3 1.9-3.3-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.7.8-3.3.8-.7 0-1.7-.8-2.8-.8-1.5 0-2.8.9-3.6 2.2-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.2 1.1 0 1.5-.7 2.8-.7 1.3 0 1.6.7 2.8.7 1.2 0 1.9-1.1 2.6-2.1.8-1.2 1.2-2.3 1.2-2.4-.1 0-2.2-.9-2.2-3.5zM14.1 6.3c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.6.6-1.1 1.7-.9 2.6 1 .1 2-.5 2.6-1.2z" />
+  </Svg>
+);
+export const LinuxIcon = (p: Props) => (
+  <Svg {...p} stroke="none" fill="currentColor">
+    <path d="M12 2c-2.3 0-3.6 1.7-3.6 4.1 0 1.3.1 2.2-.2 2.9-.3.8-1 1.6-1.8 2.9-.9 1.5-1.6 2.9-2.3 3.8-.5.7-.7 1.4-.3 1.9.4.5 1.2.5 2 .7.9.2 1.4.6 1.8 1 .5.5 1.3 1.1 2.7 1.1h3.4c1.4 0 2.2-.6 2.7-1.1.4-.4.9-.8 1.8-1 .8-.2 1.6-.2 2-.7.4-.5.2-1.2-.3-1.9-.7-.9-1.4-2.3-2.3-3.8-.8-1.3-1.5-2.1-1.8-2.9-.3-.7-.2-1.6-.2-2.9C15.6 3.7 14.3 2 12 2zm-1.6 3.1c.5 0 .9.6.9 1.3s-.4 1.3-.9 1.3-.9-.6-.9-1.3.4-1.3.9-1.3zm3.2 0c.5 0 .9.6.9 1.3s-.4 1.3-.9 1.3-.9-.6-.9-1.3.4-1.3.9-1.3zM12 8.4c1 0 2 .5 2 1 0 .3-.3.5-.7.8-.4.3-.9.6-1.3.6s-.9-.3-1.3-.6c-.4-.3-.7-.5-.7-.8 0-.5 1-1 2-1z" />
+  </Svg>
+);
+
 export const CopyIcon = (p: Props) => (
   <Svg {...p}>
     <rect x="9" y="9" width="11" height="11" rx="2" />

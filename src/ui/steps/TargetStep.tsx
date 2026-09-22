@@ -1,18 +1,44 @@
 import { useState } from "preact/hooks";
 
 import type { WizardCtx } from "../../app/wizard.ts";
-import { PLATFORMS } from "../../domain/platform.ts";
-import { BothIcon, MonitorIcon, ServerIcon } from "../icons.tsx";
-import { Badge, ChoiceCard, Field, SectionTitle } from "../primitives.tsx";
+import {
+  platformsDetectedFirst,
+  type Platform,
+} from "../../domain/platform.ts";
+import {
+  AppleIcon,
+  BothIcon,
+  LinuxIcon,
+  MonitorIcon,
+  ServerIcon,
+  WindowsIcon,
+} from "../icons.tsx";
+import {
+  Badge,
+  ChoiceCard,
+  RequiredMark,
+  SectionTitle,
+} from "../primitives.tsx";
+import { useFlaggedField } from "../use-flagged-field.ts";
+
+/** The mark each OS is known by, for the buttons below. */
+const PLATFORM_ICON = {
+  windows: WindowsIcon,
+  linux: LinuxIcon,
+  macos: AppleIcon,
+} satisfies Record<Platform, unknown>;
 
 export function TargetStep({ ctx }: { ctx: WizardCtx }) {
   const { options, setOptions, caps, mode } = ctx;
   const simple = mode === "simple";
-  // The nickname has no default any more, so the field starts empty and Next
-  // is disabled until it is filled. Say so quietly; only turn it red once the
-  // user has been in the field and left it empty.
+  // The player name has no default, so the field starts empty. It only turns
+  // red once the user has been in it and left it empty — or once they have
+  // pressed Next, which is `ctx.flagged` and what brings them back here.
   const [nickTouched, setNickTouched] = useState(false);
   const nickMissing = options.client.config.name.trim().length === 0;
+  const nickError = (nickTouched || ctx.flagged) && nickMissing;
+  const nickRef = useFlaggedField<HTMLInputElement>(ctx.flagged && nickMissing);
+  const platforms = platformsDetectedFirst(caps.platform);
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -48,8 +74,9 @@ export function TargetStep({ ctx }: { ctx: WizardCtx }) {
       <div>
         <SectionTitle>Platform</SectionTitle>
         <div role="radiogroup" className="flex flex-wrap gap-2">
-          {PLATFORMS.map((p) => {
+          {platforms.map((p) => {
             const selected = options.platform === p.id;
+            const Glyph = PLATFORM_ICON[p.id];
             return (
               <button
                 key={p.id}
@@ -65,6 +92,11 @@ export function TargetStep({ ctx }: { ctx: WizardCtx }) {
                     : "border-line bg-surface-2/60 text-fg hover:border-line-strong",
                 ].join(" ")}
               >
+                <span
+                  className={`text-base ${selected ? "text-accent" : "text-muted"}`}
+                >
+                  <Glyph />
+                </span>
                 {p.label}
                 {caps.platform === p.id && (
                   <Badge tone="accent">detected</Badge>
@@ -77,61 +109,59 @@ export function TargetStep({ ctx }: { ctx: WizardCtx }) {
 
       {simple && options.target !== "server" && (
         <div>
-          <SectionTitle>Nickname</SectionTitle>
+          <SectionTitle>
+            <label htmlFor="nickname-simple">
+              Player name
+              <RequiredMark />
+            </label>
+          </SectionTitle>
           <div className="max-w-xs">
-            <Field
-              label="The name other players will see"
-              htmlFor="nickname-simple"
-              hint="Required — Next stays disabled until you enter one."
-              error={
-                nickTouched && nickMissing
-                  ? "Enter a nickname to continue."
-                  : null
-              }
-            >
-              <input
-                id="nickname-simple"
-                className="input"
-                data-testid="nickname"
-                value={options.client.config.name}
-                placeholder="Your nickname"
-                required
-                aria-required="true"
-                maxLength={31}
-                autoComplete="nickname"
-                onBlur={() => setNickTouched(true)}
-                onInput={(e) =>
-                  setOptions((o) => ({
-                    ...o,
-                    client: {
-                      ...o.client,
-                      config: {
-                        ...o.client.config,
-                        name: (e.currentTarget as HTMLInputElement).value,
-                      },
+            <input
+              ref={nickRef}
+              id="nickname-simple"
+              className="input"
+              data-testid="nickname"
+              value={options.client.config.name}
+              placeholder="Your nickname"
+              required
+              aria-required="true"
+              aria-invalid={nickError}
+              maxLength={31}
+              autoComplete="nickname"
+              onBlur={() => setNickTouched(true)}
+              onInput={(e) =>
+                setOptions((o) => ({
+                  ...o,
+                  client: {
+                    ...o.client,
+                    config: {
+                      ...o.client.config,
+                      name: (e.currentTarget as HTMLInputElement).value,
                     },
-                  }))
-                }
-              />
-            </Field>
+                  },
+                }))
+              }
+            />
+            {nickError && (
+              <p
+                className="mt-1.5 text-xs text-danger"
+                data-testid="nick-error"
+              >
+                Enter a player name to continue.
+              </p>
+            )}
           </div>
         </div>
       )}
 
-      <p className="text-sm text-muted" data-testid="mode-hint">
-        {simple ? (
-          <>
-            Everything else is set to the QuakeWorld standard. Switch to{" "}
-            <strong className="text-fg">Advanced</strong> (top right) if you
-            want to change it.
-          </>
-        ) : (
-          <>
-            <strong className="text-fg">Advanced</strong>: the next steps let
-            you pick the ezQuake build, add-ons, keys, and every server setting.
-          </>
-        )}
-      </p>
+      {/* Simple says nothing here: the mode switch is in the card header,
+          right above this, and a paragraph repeating it only pads the step. */}
+      {!simple && (
+        <p className="text-sm text-muted" data-testid="mode-hint">
+          <strong className="text-fg">Advanced</strong>: the next steps let you
+          pick the ezQuake build, add-ons, keys, and every server setting.
+        </p>
+      )}
     </div>
   );
 }

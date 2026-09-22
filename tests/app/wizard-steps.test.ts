@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canProceed,
   hasNickname,
+  missingHere,
   restoredStepIndex,
   stepsFor,
   type WizardCtx,
@@ -119,5 +120,27 @@ describe("the nickname is obligatory", () => {
     const o = defaultOptions("linux");
     o.target = "server";
     expect(canProceed(ctx("target", o))).toBe(true);
+  });
+});
+
+describe("what Next does when the step is not ready", () => {
+  const ctx = (step: string, o: InstallOptions, mode = "simple") =>
+    ({ step, options: o, mode }) as unknown as WizardCtx;
+
+  it("keeps Next live for the player name, so pressing it can point there", () => {
+    const o = defaultOptions("linux");
+    expect(missingHere(ctx("target", o))).toBe(true);
+    expect(missingHere(ctx("config", o, "advanced"))).toBe(true);
+    o.client.config.name = "empezar";
+    expect(missingHere(ctx("target", o))).toBe(false);
+    expect(missingHere(ctx("config", o, "advanced"))).toBe(false);
+  });
+
+  it("leaves it disabled where the step has nothing to point at", () => {
+    const o = defaultOptions("linux");
+    // No folder picked: the answer is behind a picker, not in a field.
+    expect(
+      missingHere({ ...ctx("folder", o), folder: null } as WizardCtx),
+    ).toBe(false);
   });
 });

@@ -1,6 +1,12 @@
 // The installer shell: header with the wordmark, the stepper (a sidebar on
 // desktop, a strip on phones), the current step in a card, and the Back /
 // Next footer. All state lives in `useWizard`.
+//
+// The header is sticky: the wordmark says which page this is and the strip
+// says how far in you are, and a phone's screen is short enough that both
+// were gone two flicks into the first step. It compacts once the page moves
+// (slogan out, wordmark down a size) so a sticky bar costs a phone as little
+// of the step as possible.
 
 import { useEffect, useState } from "preact/hooks";
 
@@ -14,7 +20,7 @@ import {
   SunIcon,
 } from "../ui/icons.tsx";
 import { Button, Callout, Card } from "../ui/primitives.tsx";
-import { Stepper } from "../ui/Stepper.tsx";
+import { Stepper, StepperCompact } from "../ui/Stepper.tsx";
 import { ClientStep } from "../ui/steps/ClientStep.tsx";
 import { ConfigStep } from "../ui/steps/ConfigStep.tsx";
 import { DoneStep } from "../ui/steps/DoneStep.tsx";
@@ -36,6 +42,7 @@ import { applyTheme, initialTheme, type Theme } from "./theme.ts";
 import {
   QUERY,
   canProceed,
+  missingHere,
   useWizard,
   type StepId,
   type WizardCtx,
@@ -82,6 +89,7 @@ export function App({ caps }: { caps: Capabilities }) {
     initialTextSize(QUERY.text),
   );
   useEffect(() => applyTextSize(textSize), [textSize]);
+  const scrolled = useScrolled();
 
   // Keep the page on the newest deploy. The desktop app carries its own
   // bundle, so there is nothing for it to fetch.
@@ -104,60 +112,87 @@ export function App({ caps }: { caps: Capabilities }) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 pb-2 pt-5 sm:px-6">
-        <a
-          href={BASE_URL}
-          className="flex items-baseline gap-3 no-underline"
-          aria-label="nQuake"
+      {/* Opaque, not a blur: the card's own header slid under a translucent
+          bar and read as a ghost behind the wordmark. The line under it
+          appears only once there is something up there to separate. */}
+      <div
+        className={`app-top sticky top-0 z-20 bg-page-bg ${
+          scrolled ? "border-b border-line" : ""
+        }`}
+      >
+        <header
+          className={`mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 sm:px-6 sm:pb-2 sm:pt-5 ${
+            scrolled ? "pb-1 pt-2" : "pb-2 pt-5"
+          }`}
         >
-          <span className="wordmark text-4xl sm:text-5xl">
-            <span className="n">n</span>
-            <span className="quake">Quake</span>
-          </span>
-          <span className="slogan hidden text-lg text-fg-bright sm:inline">
-            QuakeWorld — where it all started
-          </span>
-        </a>
-        <div className="flex items-center gap-1">
-          <TextSizeButton size={textSize} onChange={setTextSize} />
-          <button
-            type="button"
-            aria-label={
-              theme === "dark"
-                ? "Switch to light theme"
-                : "Switch to dark theme"
-            }
-            data-testid="theme-toggle"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="focus-ring inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-fg"
-          >
-            {theme === "dark" ? (
-              <SunIcon className="h-4.5 w-4.5" />
-            ) : (
-              <MoonIcon className="h-4.5 w-4.5" />
-            )}
-          </button>
           <a
-            href="https://github.com/nQuake/web-installer"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="nQuake on GitHub"
-            className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-fg"
+            href={BASE_URL}
+            className="flex items-baseline gap-3 no-underline"
+            aria-label="nQuake"
           >
-            <GithubIcon className="h-4.5 w-4.5" />
+            <span
+              className={`wordmark sm:text-5xl ${scrolled ? "text-3xl" : "text-4xl"}`}
+            >
+              <span className="n">n</span>
+              <span className="quake">Quake</span>
+            </span>
+            <span className="slogan hidden text-lg text-fg-bright sm:inline">
+              QuakeWorld — where it all started
+            </span>
           </a>
+          <div className="flex items-center gap-1">
+            <TextSizeButton size={textSize} onChange={setTextSize} />
+            <button
+              type="button"
+              aria-label={
+                theme === "dark"
+                  ? "Switch to light theme"
+                  : "Switch to dark theme"
+              }
+              data-testid="theme-toggle"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="focus-ring inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-fg"
+            >
+              {theme === "dark" ? (
+                <SunIcon className="h-4.5 w-4.5" />
+              ) : (
+                <MoonIcon className="h-4.5 w-4.5" />
+              )}
+            </button>
+            <a
+              href="https://github.com/nQuake/web-installer"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="nQuake on GitHub"
+              className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-fg"
+            >
+              <GithubIcon className="h-4.5 w-4.5" />
+            </a>
+          </div>
+        </header>
+        {/* The slogan is the page's signature, not a fixture: on phones it
+            is there when you arrive and gives its line back to the step as
+            soon as you scroll. Desktop shows it beside the wordmark. */}
+        {!scrolled && (
+          <p className="slogan px-4 text-base text-fg-bright sm:hidden">
+            QuakeWorld — where it all started
+          </p>
+        )}
+        {/* Phones have no room for the step list, so the bar rides up here
+            instead of sitting above the card. Desktop keeps the sidebar. */}
+        <div className="mx-auto w-full max-w-5xl px-4 pb-2 pt-1.5 md:hidden">
+          <StepperCompact steps={ctx.steps} current={ctx.stepIndex} />
         </div>
-      </header>
-      <p className="slogan px-4 text-base text-fg-bright sm:hidden">
-        QuakeWorld — where it all started
-      </p>
+      </div>
 
       <div className="mx-auto w-full max-w-5xl px-4 pt-2 empty:hidden sm:px-6">
         <UpdateNotice ctx={ctx} update={update} />
       </div>
 
       <main className="mx-auto grid w-full max-w-5xl flex-1 gap-4 px-4 pb-6 pt-4 sm:px-6 md:grid-cols-[220px_1fr] md:gap-8 md:pb-10">
-        <aside className="md:sticky md:top-6 md:self-start">
+        {/* Below the sticky header: that bar is ~4.5rem tall and everything
+            in it is sized in rem, so 6rem clears it at every text size. */}
+        <aside className="hidden md:sticky md:top-24 md:block md:self-start">
           <Stepper
             steps={ctx.steps}
             current={ctx.stepIndex}
@@ -205,6 +240,22 @@ export function App({ caps }: { caps: Capabilities }) {
       </footer>
     </div>
   );
+}
+
+/**
+ * True once the page has moved at all, which is what the sticky header
+ * compacts on. The threshold is a couple of pixels rather than zero so a
+ * phone's rubber-band scroll does not flicker the slogan in and out.
+ */
+function useScrolled(threshold = 4): boolean {
+  const [scrolled, setScrolled] = useState(() => window.scrollY > threshold);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > threshold);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [threshold]);
+  return scrolled;
 }
 
 /**
@@ -405,6 +456,10 @@ function NavButtons({
   proceed: boolean;
 }) {
   const first = ctx.stepIndex === 0;
+  // A step that is only missing an answer from one of its own fields keeps a
+  // live Next: pressing it puts the cursor in that field and marks it, which
+  // is the one thing a disabled button cannot do.
+  const missing = missingHere(ctx);
   return (
     <>
       <Button
@@ -419,8 +474,8 @@ function NavButtons({
       <Button
         variant="primary"
         size="lg"
-        onClick={ctx.next}
-        disabled={!proceed}
+        onClick={proceed ? ctx.next : ctx.flagMissing}
+        disabled={!proceed && !missing}
         testId="nav-next"
       >
         {ctx.step === "review" ? <DownloadIcon className="h-5 w-5" /> : null}

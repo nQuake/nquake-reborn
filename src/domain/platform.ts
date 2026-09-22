@@ -14,6 +14,19 @@ export function platformLabel(p: Platform): string {
   return PLATFORMS.find((x) => x.id === p)?.label ?? p;
 }
 
+/**
+ * The platform buttons in the order they are offered, with the one the
+ * browser was detected on first — it is the answer for nearly everyone, and
+ * on a phone it is the one that must not be the option below the fold.
+ * Everything else keeps its order, so the row stays predictable.
+ */
+export function platformsDetectedFirst(
+  detected: Platform | null,
+): { id: Platform; label: string }[] {
+  const first = PLATFORMS.filter((p) => p.id === detected);
+  return [...first, ...PLATFORMS.filter((p) => p.id !== detected)];
+}
+
 /** Upstream mirror target ids per component and platform. */
 export const UPSTREAM_TARGET: Record<
   "ezquake" | "mvdsv" | "ktx",

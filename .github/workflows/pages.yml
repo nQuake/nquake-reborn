@@ -8,7 +8,7 @@ name: pages
 #   <base>/branch/   an opt-in feature branch, parked via workflow_dispatch
 #
 # <base> is `/<repo-name>/` on the default *.github.io host — for this
-# repository, `/nquake-reborn/` — and `/` when the PAGES_CNAME secret puts a
+# repository, `/web-installer/` — and `/` when the PAGES_CNAME secret puts a
 # custom domain in front. `vite.config.ts` reads the slot's base from
 # VITE_BASE.
 

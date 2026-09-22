@@ -1,4 +1,4 @@
-# Contributing to nquake-reborn
+# Contributing to nQuake Reborn
 
 ## Prerequisites
 
@@ -9,8 +9,8 @@
 ## Setup
 
 ```sh
-git clone https://github.com/nQuake/nquake-reborn.git
-cd nquake-reborn
+git clone https://github.com/nQuake/web-installer.git
+cd web-installer
 npm ci
 npm run dev      # http://localhost:5173
 ```

@@ -126,7 +126,7 @@ export function App({ caps }: { caps: Capabilities }) {
             )}
           </button>
           <a
-            href="https://github.com/nQuake/nquake-reborn"
+            href="https://github.com/nQuake/web-installer"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="nQuake on GitHub"
@@ -203,7 +203,7 @@ export function App({ caps }: { caps: Capabilities }) {
             </a>
             <a
               className="hover:text-fg"
-              href="https://github.com/nQuake/nquake-reborn/blob/main/LICENSE"
+              href="https://github.com/nQuake/web-installer/blob/main/LICENSE"
             >
               GPL-2.0
             </a>

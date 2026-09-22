@@ -19,7 +19,7 @@
   "author": "nQuake",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nQuake/nquake-reborn.git"
+    "url": "https://github.com/nQuake/web-installer.git"
   },
   "dependencies": {
     "@fontsource/open-sans-condensed": "^4.5.5",

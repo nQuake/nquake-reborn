@@ -64,7 +64,7 @@ The installer is three pure things and two impure ones.
 
 ```
 raw.githubusercontent.com/nQuake/distfiles/<commit>/<pkg>/<path>      ← manifest.json
-raw.githubusercontent.com/nQuake/nquake-reborn/upstream-mirror/...   ← upstream.json
+raw.githubusercontent.com/nQuake/web-installer/upstream-mirror/...   ← upstream.json
 ```
 
 Both are read through `src/net/sources.ts`. The manifest pins files to the

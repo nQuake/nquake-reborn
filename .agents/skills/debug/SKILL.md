@@ -1,6 +1,6 @@
 ---
 name: debug
-description: Debug the nQuake web installer (nquake-reborn) — reproduce and fix a bug report, work out why a file failed to install or came out wrong, or inspect what an install would actually do. Use this whenever someone reports something going wrong with an nQuake install ("Cannot create X", a file missing or not executable, a wrong config, a failed download, the wizard offering the wrong things), whenever you need to see the plan or a generated config without running a real install, and whenever the screenshot harness or the toolchain misbehaves in a sandbox. Reach for it even when the report is a vague screenshot from Discord — the triage table turns an error string into a file to open.
+description: Debug the nQuake web installer (nQuake Reborn) — reproduce and fix a bug report, work out why a file failed to install or came out wrong, or inspect what an install would actually do. Use this whenever someone reports something going wrong with an nQuake install ("Cannot create X", a file missing or not executable, a wrong config, a failed download, the wizard offering the wrong things), whenever you need to see the plan or a generated config without running a real install, and whenever the screenshot harness or the toolchain misbehaves in a sandbox. Reach for it even when the report is a vague screenshot from Discord — the triage table turns an error string into a file to open.
 ---
 
 # Debugging the nQuake installer

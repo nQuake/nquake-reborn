@@ -13,7 +13,7 @@ export const DISTFILES_REPO =
   import.meta.env.VITE_DISTFILES_REPO || "nQuake/distfiles";
 export const DISTFILES_REF = import.meta.env.VITE_DISTFILES_REF || "master";
 export const UPSTREAM_REPO =
-  import.meta.env.VITE_UPSTREAM_REPO || "nQuake/nquake-reborn";
+  import.meta.env.VITE_UPSTREAM_REPO || "nQuake/web-installer";
 export const UPSTREAM_REF =
   import.meta.env.VITE_UPSTREAM_REF || "upstream-mirror";
 

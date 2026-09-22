@@ -34,7 +34,17 @@ export function ReviewStep({ ctx }: { ctx: WizardCtx }) {
           : "Server",
     ],
     ["Platform", platformLabel(o.platform)],
-    ["Folder", <span className="font-mono break-all">{folderName}</span>],
+    [
+      "Folder",
+      <span className="flex flex-col items-end">
+        <span className="font-mono break-all">{folderName}</span>
+        {!folder.picked.path && (
+          <span className="text-xs text-muted">
+            the folder you picked (a browser only shares its name)
+          </span>
+        )}
+      </span>,
+    ],
   ];
   if (client) {
     if (simple) {

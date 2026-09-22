@@ -189,7 +189,7 @@ export function App({ caps }: { caps: Capabilities }) {
         <UpdateNotice ctx={ctx} update={update} />
       </div>
 
-      <main className="mx-auto grid w-full max-w-5xl flex-1 gap-4 px-4 pb-6 pt-4 sm:px-6 md:grid-cols-[220px_1fr] md:gap-8 md:pb-10">
+      <main className="mx-auto grid w-full max-w-5xl flex-1 gap-4 px-4 pb-6 pt-4 sm:px-6 md:grid-cols-[220px_1fr] md:content-start md:gap-8 md:pb-10">
         {/* Below the sticky header: that bar is ~4.5rem tall and everything
             in it is sized in rem, so 6rem clears it at every text size. */}
         <aside className="hidden md:sticky md:top-24 md:block md:self-start">

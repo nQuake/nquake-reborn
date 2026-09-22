@@ -86,6 +86,20 @@ export function SectionTitle({
   );
 }
 
+/**
+ * The red asterisk on an answer the wizard will not move past. The input
+ * itself carries `aria-required`, so this is decoration — a screen reader
+ * hears "required" either way, and a sighted user sees which field the
+ * disabled-looking Next is waiting for.
+ */
+export function RequiredMark() {
+  return (
+    <span className="text-danger" title="Required" aria-hidden="true">
+      {" *"}
+    </span>
+  );
+}
+
 export function Field({
   label,
   hint,
@@ -196,19 +210,26 @@ export function ChoiceCard({
       data-testid={testId}
       onClick={onSelect}
       className={[
-        "focus-ring relative flex w-full cursor-pointer flex-col items-start gap-2 rounded-lg border p-4 text-left transition",
+        "focus-ring relative flex w-full cursor-pointer flex-col items-start gap-1 rounded-lg border px-4 py-3 text-left transition",
         selected
           ? "border-accent bg-accent-wash shadow-[inset_0_0_0_1px_var(--accent)]"
           : "border-line bg-surface-2/60 hover:border-line-strong",
         disabled ? "cursor-not-allowed opacity-50" : "",
       ].join(" ")}
     >
-      {icon && (
-        <span className={`text-2xl ${selected ? "text-accent" : "text-muted"}`}>
-          {icon}
-        </span>
-      )}
-      <span className="text-base font-semibold text-fg-bright">{title}</span>
+      {/* Glyph and title on one line: stacked, three of these cards filled a
+          phone screen on their own and pushed the rest of the step below the
+          fold. `pr-6` keeps the title clear of the tick in the corner. */}
+      <span className="flex items-center gap-2.5 pr-6">
+        {icon && (
+          <span
+            className={`text-xl leading-none ${selected ? "text-accent" : "text-muted"}`}
+          >
+            {icon}
+          </span>
+        )}
+        <span className="text-base font-semibold text-fg-bright">{title}</span>
+      </span>
       {description && <span className="text-sm text-muted">{description}</span>}
       {meta && (
         <span className="mt-1 text-xs tabular-nums text-muted">{meta}</span>

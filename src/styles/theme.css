@@ -243,9 +243,18 @@ select.input {
   animation: shimmer 1.6s linear infinite;
 }
 
+/* The sticky header: the wordmark and, on phones, the step bar. It compacts
+   once the page scrolls (see `app/App.tsx`), and the size change is worth
+   easing — it happens under the reader's thumb. */
+.app-top .wordmark {
+  transition: font-size 140ms ease;
+}
+
 /* The screenshot harness sets `data-shot` on <html> so full-page captures
    show the phone nav where it settles at the end of the page rather than
-   pinned to the bottom of an 844px viewport halfway down the image. */
-html[data-shot] .phone-nav {
+   pinned to the bottom of an 844px viewport halfway down the image, and the
+   header where the page starts rather than floating over the middle of it. */
+html[data-shot] .phone-nav,
+html[data-shot] .app-top {
   position: static;
 }

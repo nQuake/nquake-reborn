@@ -126,7 +126,7 @@ browser.
 | `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, client launcher, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `session.ts` (what survives a reload) / `update.ts` (when the app may replace itself), `paths.ts` (names a browser cannot create), `pk3.ts` (the zip writer that gets round them), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
 | `src/net` | `sources.ts` (URLs, index loading, env overrides), `version.ts` (the deploy's own `version.json`), `transport.ts` (fetch + retry/backoff; 404 is final), `installer.ts` (`runInstall`: worker pool, progress, failures collected, record + readme + chmod at the end) | domain, platform types |
 | `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam — `canSetExecutable`, `nameRules`), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
-| `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue, `CommandBlock` — the terminal block with the copy button…), `Stepper.tsx`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
+| `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue, `RequiredMark`, `CommandBlock` — the terminal block with the copy button…), `Stepper.tsx` (`Stepper`, the desktop list; `StepperCompact`, the phone strip that rides in the sticky header), `use-flagged-field.ts`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
 | `src/app` | `wizard.ts` (state, flow, catalog loading, install run, saving and restoring the answers), `App.tsx` (shell, mode switch, nav), `self-update.ts` (the version poll) + `session-store.ts` (the `sessionStorage` glue), `main.tsx`, `theme.ts`, `text-size.ts` | everything |
 | `tests/` | vitest suites mirroring `src/`; `tests/fixtures/upstream.json` | |
 | `scripts/` | `screenshots.mjs`, `mirror-upstream.mjs`, `release/*` (changeset + changelog tooling, copied from the notes app) | |
@@ -271,19 +271,27 @@ Steps are computed from the options **and the mode** (`stepsFor` in
 `app/wizard.ts`).
 
 - **Simple** (default) is Next, Next, Next on the QuakeWorld standard
-  setup: welcome → target (Play / Host / Both, platform, **nickname**)
+  setup: welcome → target (Play / Host / Both, platform — the detected OS
+  first, `platformsDetectedFirst` — and the **player name**)
   → folder → review → install → done. Defaults live in
   `domain/options.ts#defaultOptions`: latest ezQuake, 24-bit textures on,
   no HD textures / TF / CA, WASD; server: two KTX ports
   from 27500, QTV + QWFWD on, latest MVDSV + KTX, full map pack, generated
   rcon / QTV passwords. **A Simple install must never need the Advanced
   steps to be playable.**
-- **The nickname is the one answer with no default.** `defaultOptions`
+- **The player name is the one answer with no default.** `defaultOptions`
   leaves `client.config.name` empty and `canProceed` blocks the step that
   asks for it — target in Simple, config in Advanced — until it is filled;
   a server-only install is never asked. `preset.cfg` points both `name` and
   `cl_fakename` at it, so a default here would be a room full of players
-  called "player" saying "PLAYER:" in team chat.
+  called "player" saying "PLAYER:" in team chat. It is the one block Next
+  does not go dead for: `missingHere` keeps the button live, pressing it
+  sets `WizardCtx.flagged`, and the step that owns the field turns it red
+  and scrolls it to the middle of the screen (`ui/use-flagged-field.ts`).
+  A disabled button explains nothing, and on a phone the field it is
+  waiting for is usually off screen. Everything else a step can lack (a
+  folder nobody picked, a catalog still loading) keeps Next disabled,
+  because there is nothing on the step to point at.
 - **Advanced** unfolds client → config (keys, mouse, custom binds, preset
   preview) and/or server (identity, ports, passwords, services, binaries,
   content) between target and folder. The switch sits in the card header;
@@ -428,6 +436,24 @@ load. The two halves are one decision: putting pinch-zoom back is the only
 thing that would make the button optional. Desktop
 shows a sidebar stepper; phones get a compact strip and a sticky bottom nav.
 **Both viewports are primary**; check every visible change at both.
+
+**The header sticks.** The wordmark and, on phones, the step strip sit in
+one `sticky top-0` bar (`.app-top`), opaque rather than blurred — the card's
+own header read as a ghost through a translucent one — with a hairline under
+it once the page has moved. That move is `useScrolled` in `App.tsx`, and on
+phones it also compacts the bar: the slogan steps out and the wordmark drops
+a size, so what a sticky bar costs the step is about one line. The desktop
+stepper hangs below it at `md:top-24`, which clears the tallest the bar
+gets at any text size. The screenshot harness renders both sticky bars
+static (`html[data-shot]`).
+
+**The browser's own chrome is themed too.** Safari tints its address bar —
+and, on a phone, the toolbar at the bottom — with `<meta name="theme-color">`,
+which is what sits directly against the sticky Next bar, so it is set to
+`--surface` rather than the page behind it. `index.html` carries the two
+media-scoped metas for the first paint; `app/theme.ts#applyTheme` then
+replaces them with one that follows the *header's* toggle, because a
+media query only knows what the OS thinks.
 
 ## Deploy, release, changelog
 

@@ -155,6 +155,16 @@ export interface WizardCtx {
   next: () => void;
   back: () => void;
   goTo: (index: number) => void;
+  /**
+   * Next was pressed while this step was still missing an answer the user
+   * can give here. The step that owns the answer turns it red and puts the
+   * cursor in it — a dead button says nothing, least of all on a phone,
+   * where the field it is waiting for may be off screen. Cleared on every
+   * move between steps.
+   */
+  flagged: boolean;
+  /** What Next calls instead of moving on. */
+  flagMissing: () => void;
 }
 
 export function randomPassword(): string {
@@ -401,18 +411,25 @@ export function useWizard(caps: Capabilities): WizardCtx {
   );
   const clamped = Math.min(stepIndex, steps.length - 1);
   const step = steps[clamped]?.id ?? "welcome";
+  // Whether Next has been pressed on a step that is not ready yet; the step
+  // shows the user what it is waiting for. A move of any kind clears it.
+  const [flagged, setFlagged] = useState(false);
   const next = useCallback(() => {
+    setFlagged(false);
     setStepIndex((i) => Math.min(i + 1, steps.length - 1));
     window.scrollTo({ top: 0 });
   }, [steps.length]);
   const back = useCallback(() => {
+    setFlagged(false);
     setStepIndex((i) => Math.max(i - 1, 0));
     window.scrollTo({ top: 0 });
   }, []);
   const goTo = useCallback((index: number) => {
+    setFlagged(false);
     setStepIndex(index);
     window.scrollTo({ top: 0 });
   }, []);
+  const flagMissing = useCallback(() => setFlagged(true), []);
 
   // ---- Saving the answers
   //
@@ -550,6 +567,7 @@ export function useWizard(caps: Capabilities): WizardCtx {
       },
     }));
     setStepIndex(0);
+    setFlagged(false);
     window.scrollTo({ top: 0 });
   }, []);
 
@@ -579,6 +597,8 @@ export function useWizard(caps: Capabilities): WizardCtx {
     next,
     back,
     goTo,
+    flagged,
+    flagMissing,
   };
 }
 
@@ -590,6 +610,22 @@ export function mockDestination(): Destination {
 /** The nickname is obligatory for any install that includes the client. */
 export function hasNickname(o: InstallOptions): boolean {
   return o.client.config.name.trim().length > 0;
+}
+
+/**
+ * Whether what the current step is missing is something the user can see and
+ * fix on it — today only the player name. Next stays live for these so that
+ * pressing it points at the field (`WizardCtx.flagMissing`) instead of doing
+ * nothing; everything else (a folder nobody has picked, a catalog still
+ * loading) keeps the button disabled, because there is nothing on the step
+ * to point at.
+ */
+export function missingHere(ctx: WizardCtx): boolean {
+  if (canProceed(ctx)) return false;
+  return (
+    (ctx.step === "target" || ctx.step === "config") &&
+    !hasNickname(ctx.options)
+  );
 }
 
 /** Whether the current step's answers are complete enough to move on. */

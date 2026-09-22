@@ -200,7 +200,7 @@ export function App({ caps }: { caps: Capabilities }) {
       {/* The whole footer is one line: which build you are looking at, linked
           at the commit it was built from. A bug report that carries this is a
           bug report you can check out. */}
-      <footer className="mx-auto w-full max-w-5xl px-4 pb-6 text-center text-xs text-muted sm:px-6">
+      <footer className="mx-auto w-full max-w-5xl px-4 pb-6 text-right text-xs text-muted sm:px-6">
         <BuildStamp />
       </footer>
     </div>

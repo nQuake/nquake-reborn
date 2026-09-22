@@ -100,6 +100,17 @@ suite is fast (vitest, ~50 tests) and covers the plan builder, the config
 generators, the install record, the wizard step flow and the installer run
 against a fake transport and destination.
 
+**Two TypeScripts are installed on purpose.** `tsc` is TypeScript 7 — the Go
+port, which is what `npm run typecheck` and the `lint` script run — but 7.0
+ships no programmatic API (that lands in 7.1), and typescript-eslint refuses
+to load against it. So `package.json` follows the upgrade note's own recipe
+and aliases both: `typescript` resolves to `@typescript/typescript6`, the
+6.0 API package every tool that `import`s `typescript` gets, and
+`@typescript/native` is the real `typescript@7` that provides the `tsc`
+binary. The 6.0 compiler is still there as `tsc6` if you need to compare.
+Don't "tidy" either alias away — dropping the first breaks `eslint`, dropping
+the second silently type-checks with the old compiler.
+
 **Debugging a bug report starts at `.agents/skills/debug/`** (symlinked as
 `.claude/skills/`). It holds the triage table from error string to file, the
 sandbox traps (no GTK for `cargo check`, no network in the headless browser,

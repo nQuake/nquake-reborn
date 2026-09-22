@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "preact/hooks";
 
-import { BUILD_LABEL } from "../build-env.ts";
+import { BUILD_COMMIT, BUILD_LABEL, REPO_URL } from "../build-env.ts";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -26,6 +26,12 @@ import { TargetStep } from "../ui/steps/TargetStep.tsx";
 import { WelcomeStep } from "../ui/steps/WelcomeStep.tsx";
 import type { Capabilities } from "../platform/capabilities.ts";
 import { useSelfUpdate, type SelfUpdate } from "./self-update.ts";
+import {
+  applyTextSize,
+  initialTextSize,
+  nextTextSize,
+  type TextSize,
+} from "./text-size.ts";
 import { applyTheme, initialTheme, type Theme } from "./theme.ts";
 import {
   QUERY,
@@ -71,6 +77,11 @@ export function App({ caps }: { caps: Capabilities }) {
   const ctx = useWizard(caps);
   const [theme, setTheme] = useState<Theme>(() => initialTheme(QUERY.theme));
   useEffect(() => applyTheme(theme), [theme]);
+  // Phones cannot pinch-zoom this page, so this is how the type gets bigger.
+  const [textSize, setTextSize] = useState<TextSize>(() =>
+    initialTextSize(QUERY.text),
+  );
+  useEffect(() => applyTextSize(textSize), [textSize]);
 
   // Keep the page on the newest deploy. The desktop app carries its own
   // bundle, so there is nothing for it to fetch.
@@ -108,6 +119,7 @@ export function App({ caps }: { caps: Capabilities }) {
           </span>
         </a>
         <div className="flex items-center gap-1">
+          <TextSizeButton size={textSize} onChange={setTextSize} />
           <button
             type="button"
             aria-label={
@@ -185,32 +197,77 @@ export function App({ caps }: { caps: Capabilities }) {
         )}
       </main>
 
-      <footer className="mx-auto w-full max-w-5xl px-4 pb-6 text-xs text-muted sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-line-strong pt-4">
-          <span>
-            nQuake by Empezar and the QuakeWorld community · web installer{" "}
-            <span className="font-mono">v{BUILD_LABEL}</span>
-          </span>
-          <span className="flex gap-4">
-            <a className="hover:text-fg" href="https://www.nquake.com/">
-              nquake.com
-            </a>
-            <a
-              className="hover:text-fg"
-              href="https://github.com/nQuake/distfiles"
-            >
-              distribution files
-            </a>
-            <a
-              className="hover:text-fg"
-              href="https://github.com/nQuake/web-installer/blob/main/LICENSE"
-            >
-              GPL-2.0
-            </a>
-          </span>
-        </div>
+      {/* The whole footer is one line: which build you are looking at, linked
+          at the commit it was built from. A bug report that carries this is a
+          bug report you can check out. */}
+      <footer className="mx-auto w-full max-w-5xl px-4 pb-6 text-right text-xs text-muted sm:px-6">
+        <BuildStamp />
       </footer>
     </div>
+  );
+}
+
+/**
+ * `v0.2.0.15+8f4022d` — the deployed build label and the commit it was built
+ * from, linked at that commit on GitHub. A build with no git and no
+ * `GITHUB_SHA` behind it (a source tarball) has no hash to show and no commit
+ * to link at, so it stays plain text.
+ */
+function BuildStamp() {
+  const short = BUILD_COMMIT.slice(0, 7);
+  const label = `v${BUILD_LABEL}${short ? `+${short}` : ""}`;
+  if (!short) return <span className="font-mono">{label}</span>;
+  return (
+    <a
+      className="font-mono hover:text-fg"
+      href={`${REPO_URL}/commit/${BUILD_COMMIT}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Built from ${BUILD_COMMIT}`}
+      data-testid="build-stamp"
+    >
+      {label}
+    </a>
+  );
+}
+
+/**
+ * Small / medium / large, cycled by one button — the replacement for the
+ * pinch-zoom the page turns off on phones. The two A's show where you are:
+ * the right-hand one is drawn at the size you picked.
+ */
+function TextSizeButton({
+  size,
+  onChange,
+}: {
+  size: TextSize;
+  onChange: (s: TextSize) => void;
+}) {
+  const next = nextTextSize(size);
+  return (
+    <button
+      type="button"
+      aria-label={`Text size: ${size}. Switch to ${next}.`}
+      title={`Text size: ${size}`}
+      data-testid="text-size"
+      onClick={() => onChange(next)}
+      className="focus-ring inline-flex h-9 cursor-pointer items-center justify-center rounded-md px-2 text-muted hover:bg-surface-2 hover:text-fg"
+    >
+      <span className="flex items-baseline gap-0.5">
+        <span className="display text-[0.8rem] leading-none">A</span>
+        <span
+          className={`display leading-none ${
+            size === "small"
+              ? "text-[1rem]"
+              : size === "medium"
+                ? "text-[1.25rem]"
+                : "text-[1.5rem]"
+          }`}
+        >
+          A
+        </span>
+      </span>
+    </button>
   );
 }
 

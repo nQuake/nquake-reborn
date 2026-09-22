@@ -33,26 +33,42 @@ describe("renderPresetCfg", () => {
     expect(cfg).not.toContain("\r\n");
     expect(cfg).toContain('name "a\'b"');
     expect(cfg).toContain('cl_fakename "a\'b"');
+    // (Three characters long already, so the abbreviation is the whole name.)
   });
 
-  it("points cl_fakename at the nickname, and says why", () => {
+  it("abbreviates the nickname into cl_fakename, and says why", () => {
     // nquake_default.cfg sets cl_fakename "pla", and ezQuake rewrites every
     // say_team as <cl_fakename><suffix><message> — so without this every
-    // team message reads "PLA: ..." no matter what `name` says.
+    // team message reads "PLA: ..." no matter what `name` says. Three
+    // characters is nQuake's own length, and the point of the cvar: a team
+    // message is only so wide, and the width belongs to the message.
     const o = defaultOptions("linux");
     o.client.config.name = "terryb";
     const cfg = renderPresetCfg(o.client.config, "linux");
-    expect(cfg).toContain('cl_fakename "terryb"');
-    // It only wins because preset.cfg is exec'd after nquake_default.cfg,
-    // which is worth a comment in a file a player will open one day.
-    expect(cfg).toMatch(/\/\/ Team messages \(say_team\)/);
-    expect(cfg).toContain("PLA:");
+    expect(cfg).toContain('name "terryb"');
+    expect(cfg).toContain('cl_fakename "ter"');
+    // The cvar does not follow `name`, so the file says so on one line —
+    // it is read in a text editor, next to 150 other lines of config.
+    expect(cfg).toContain(
+      "// Prefixes your team messages. Change it too if you change your name.",
+    );
 
-    // An empty nickname falls back to the same default for both.
+    // An empty nickname falls back to the default, abbreviated the same way.
     o.client.config.name = "   ";
     const fallback = renderPresetCfg(o.client.config, "linux");
     expect(fallback).toContain('name "Player"');
-    expect(fallback).toContain('cl_fakename "Player"');
+    expect(fallback).toContain('cl_fakename "Pla"');
+
+    // A nickname shorter than the abbreviation is used whole, and a cut that
+    // lands after a space does not leave the space behind.
+    o.client.config.name = "ic";
+    expect(renderPresetCfg(o.client.config, "linux")).toContain(
+      'cl_fakename "ic"',
+    );
+    o.client.config.name = "ab cd";
+    expect(renderPresetCfg(o.client.config, "linux")).toContain(
+      'cl_fakename "ab"',
+    );
   });
 });
 

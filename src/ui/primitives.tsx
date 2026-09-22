@@ -1,10 +1,11 @@
 // The small vocabulary every step is built from: Button, Card, Field,
-// Toggle, ChoiceCard, Callout, ProgressBar, Badge. Tailwind utilities over
-// the tokens in `styles/theme.css`.
+// Toggle, ChoiceCard, Callout, ProgressBar, Badge, CommandBlock. Tailwind
+// utilities over the tokens in `styles/theme.css`.
 
 import type { ComponentChildren, JSX } from "preact";
+import { useEffect, useRef, useState } from "preact/hooks";
 
-import { CheckIcon, InfoIcon, WarnIcon } from "./icons.tsx";
+import { CheckIcon, CopyIcon, InfoIcon, WarnIcon } from "./icons.tsx";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
@@ -376,4 +377,95 @@ export function ExternalLink({
       {children}
     </a>
   );
+}
+
+/**
+ * A command to run in a terminal, with a copy button in the corner of the
+ * "window". Retyping `cd /d "C:\path\to\nquake"` from a screen is exactly the
+ * kind of thing that goes wrong at the last step of an install, so the block
+ * hands the whole thing — every line — to the clipboard in one click.
+ *
+ * `navigator.clipboard` needs a secure context, and this page is also served
+ * over plain HTTP in simulation mode, so an `execCommand("copy")` fallback
+ * sits behind it; if both fail the button says so instead of lying.
+ */
+export function CommandBlock({
+  command,
+  label = "Copy command",
+  className = "",
+  testId,
+}: {
+  command: string;
+  label?: string;
+  className?: string;
+  testId?: string;
+}) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  const copy = async () => {
+    const ok = await copyText(command);
+    setState(ok ? "copied" : "failed");
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setState("idle"), 2000);
+  };
+
+  return (
+    // The button is a sibling of the <pre> rather than floating over it, so a
+    // command too wide for the block scrolls *under nothing*. Both are h-6 /
+    // leading-6 against a common top edge: that is what puts the button on the
+    // first line's centre line, for one line or for five.
+    <div
+      className={`flex items-start gap-2 rounded-md border border-line bg-page-bg p-2 ${className}`}
+      data-testid={testId}
+    >
+      <pre className="min-w-0 flex-1 overflow-x-auto font-mono text-xs leading-6 text-fg">
+        {command}
+      </pre>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={label}
+        data-testid="copy-command"
+        className="focus-ring inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border border-line-strong bg-surface-2 px-2 text-[0.7rem] font-medium text-muted transition hover:bg-surface-3 hover:text-fg"
+      >
+        {state === "copied" ? (
+          <CheckIcon className="h-3.5 w-3.5 text-success" />
+        ) : (
+          <CopyIcon className="h-3.5 w-3.5" />
+        )}
+        <span aria-live="polite">
+          {state === "copied"
+            ? "Copied"
+            : state === "failed"
+              ? "Press Ctrl+C"
+              : "Copy"}
+        </span>
+      </button>
+    </div>
+  );
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Insecure context, or permission refused. Fall through.
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
 }

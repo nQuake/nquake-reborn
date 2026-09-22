@@ -7,6 +7,7 @@
 //   node scripts/screenshots.mjs --url http://localhost:5173   # against a dev server
 //   node scripts/screenshots.mjs --scenario server --viewport phone --theme dark
 //   node scripts/screenshots.mjs --platform linux
+//   node scripts/screenshots.mjs --text large   # at the largest text size
 //   node scripts/screenshots.mjs --manifest ../distfiles/manifest.json
 //
 // The build it photographs reads the distfiles manifest from a local copy
@@ -47,6 +48,8 @@ const urlArg = arg("url", "");
 // on Windows refuses, which is the only way to shoot the finish-the-install
 // screen without a Windows machine.
 const names = arg("names", "");
+// `--text large` shoots the page at one of the header's text sizes.
+const textSize = arg("text", "");
 const manifestPath = arg(
   "manifest",
   resolve(root, "../distfiles/manifest.json"),
@@ -250,7 +253,8 @@ async function shoot(browser, baseUrl, scenario, viewportName, theme) {
   const page = await context.newPage();
   const url =
     `${baseUrl}?mock=1&theme=${theme}&platform=${platform}` +
-    (names ? `&names=${names}` : "");
+    (names ? `&names=${names}` : "") +
+    (textSize ? `&text=${textSize}` : "");
   await page.goto(url, { waitUntil: "networkidle" });
   // See `html[data-shot]` in src/styles/theme.css.
   await page.evaluate(

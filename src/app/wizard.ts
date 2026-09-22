@@ -167,6 +167,7 @@ function readQuery(): {
   mock: boolean;
   platform: Platform | null;
   theme: string | null;
+  text: string | null;
   mode: WizardMode | null;
   names: NameRules | null;
   fresh: boolean;
@@ -180,6 +181,8 @@ function readQuery(): {
     mock: q.get("mock") === "1" || q.get("mock") === "true",
     platform: p === "windows" || p === "linux" || p === "macos" ? p : null,
     theme: q.get("theme"),
+    // `?text=large` picks a text size for this page load, for screenshots.
+    text: q.get("text"),
     mode: m === "simple" || m === "advanced" ? m : null,
     // `?names=browser-windows` makes the simulation refuse what a browser on
     // Windows refuses — the only way to see that install without one.
@@ -200,6 +203,7 @@ export const QUERY =
         mock: false,
         platform: null,
         theme: null,
+        text: null,
         mode: null,
         names: null,
         fresh: false,

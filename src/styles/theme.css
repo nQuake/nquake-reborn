@@ -41,6 +41,21 @@
   --radius: 10px;
 }
 
+/* Text size (`src/app/text-size.ts`). Pinch-zoom is off on phones, so this is
+   how the type gets bigger: everything in the UI is sized in rem, so moving
+   the root font size moves the whole layout with it. Medium is the default
+   and is the browser's own 16px. */
+:root,
+:root[data-text-size="medium"] {
+  font-size: 16px;
+}
+:root[data-text-size="small"] {
+  font-size: 14px;
+}
+:root[data-text-size="large"] {
+  font-size: 18.5px;
+}
+
 /* Dark — the default and the pre-boot paint. nquake.com's charcoal linen,
    #959595 body copy, the orange of the logo's "n" and its #FFD930 links. */
 :root,

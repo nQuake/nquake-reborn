@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import process from "node:process";
 import preact from "@preact/preset-vite";
@@ -9,6 +10,22 @@ const pkg = JSON.parse(
 ) as { version: string };
 
 const PROJECT_NAME = "nQuake";
+
+// The commit the bundle was built from, so the footer's version can link at
+// the exact source. CI hands it over in GITHUB_SHA; locally git knows. A
+// checkout with neither (a source tarball) builds fine and shows no hash.
+function buildCommit(): string {
+  const fromEnv = process.env.VITE_COMMIT ?? process.env.GITHUB_SHA;
+  if (fromEnv && /^[0-9a-f]{7,40}$/i.test(fromEnv)) return fromEnv;
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
+}
 
 // Emit `dist/version.json` so a deploy can be identified from outside the
 // app (and by the smoke test in `pages.yml`).
@@ -66,6 +83,7 @@ export default defineConfig(({ mode }) => {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __BUILD_LABEL__: JSON.stringify(buildLabel),
       __APP_NAME__: JSON.stringify(PROJECT_NAME),
+      __BUILD_COMMIT__: JSON.stringify(buildCommit()),
     },
     test: {
       // Domain / net tests run in node. UI tests opt into jsdom with a

@@ -126,8 +126,8 @@ browser.
 | `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, client launcher, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `session.ts` (what survives a reload) / `update.ts` (when the app may replace itself), `paths.ts` (names a browser cannot create), `pk3.ts` (the zip writer that gets round them), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
 | `src/net` | `sources.ts` (URLs, index loading, env overrides), `version.ts` (the deploy's own `version.json`), `transport.ts` (fetch + retry/backoff; 404 is final), `installer.ts` (`runInstall`: worker pool, progress, failures collected, record + readme + chmod at the end) | domain, platform types |
 | `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam — `canSetExecutable`, `nameRules`), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
-| `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue…), `Stepper.tsx`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
-| `src/app` | `wizard.ts` (state, flow, catalog loading, install run, saving and restoring the answers), `App.tsx` (shell, mode switch, nav), `self-update.ts` (the version poll) + `session-store.ts` (the `sessionStorage` glue), `main.tsx`, `theme.ts` | everything |
+| `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue, `CommandBlock` — the terminal block with the copy button…), `Stepper.tsx`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
+| `src/app` | `wizard.ts` (state, flow, catalog loading, install run, saving and restoring the answers), `App.tsx` (shell, mode switch, nav), `self-update.ts` (the version poll) + `session-store.ts` (the `sessionStorage` glue), `main.tsx`, `theme.ts`, `text-size.ts` | everything |
 | `tests/` | vitest suites mirroring `src/`; `tests/fixtures/upstream.json` | |
 | `scripts/` | `screenshots.mjs`, `mirror-upstream.mjs`, `release/*` (changeset + changelog tooling, copied from the notes app) | |
 | `tauri/` | The desktop shell (see below) | nothing from `src/` |
@@ -254,13 +254,16 @@ everyone with an existing install keeps the old file until they reinstall —
 so prefer fixing it in *both* places when the installer can also override it.
 But read the shipped file's intent before calling it broken. `cl_fakename` is
 the worked example of both halves: `nquake_default.cfg` sets it to `"pla"`,
-which looks like a leftover from `name "player"` and is deliberate — ezQuake
-rewrites every `say_team` as `<cl_fakename><suffix><message>`, so a short
-fakename is what leaves a team message's width for the message. The actual
-defect is narrower: nothing makes it follow a player who renames themselves.
-Only the installer knows the name, so `preset.cfg` writes it (new installs,
-immediately) and distfiles keeps its default, with a comment saying what it
-is for.
+which looks like a leftover from `name "player"` and is half deliberate —
+ezQuake rewrites every `say_team` as `\x0d<cl_fakename><suffix><message>` (the
+CR tells the server the message already has its prefix), so a *short* fakename
+is what leaves a team message's width for the message. The defect is narrower
+than "wrong value": nothing makes it follow a player who renames themselves.
+So the fix keeps the length and replaces the name — `preset.cfg` writes the
+first three characters of the installer's nickname, not the whole thing
+(which would be no narrower than the server's own prefix) and not `""` (which
+turns the cvar off and gives that prefix back). Only the installer knows the
+name; distfiles keeps its default, with a comment saying what it is for.
 
 ## The wizard
 
@@ -398,8 +401,9 @@ renders them). Keep the test ids it clicks: `nav-next`, `mode-*`,
 `install-percent`, `done`, `catalog-ready`. It sets `data-shot` on `<html>`
 so the phone nav renders in flow (see `theme.css`). Playwright is resolved
 from a global install, not a project dependency; `--url` points it at a
-running dev server, `--scenario/--viewport/--theme/--platform` narrow a run, and `--names` is
-passed through as the simulated folder's name rules.
+running dev server, `--scenario/--viewport/--theme/--platform` narrow a run,
+`--names` is passed through as the simulated folder's name rules, and
+`--text` as the header's text size.
 
 ## Design
 
@@ -410,7 +414,18 @@ links, an orange primary button. Both faces are self-hosted via
 `@fontsource`. Tokens live in `src/styles/theme.css` (dark default, light
 variant, `<html data-theme>`, OS preference + a header toggle remembered in
 `localStorage`); use the slot names (`bg-surface`, `text-muted`,
-`border-line`, `text-accent`…), never raw colours in components. Desktop
+`border-line`, `text-accent`…), never raw colours in components.
+
+**Phones cannot pinch-zoom this page** (the viewport meta in `index.html`): a
+pinch scales the sticky Next bar off the screen, and a wizard has no
+horizontal scroll to go and find it with. What that zoom was legitimately for
+— bigger type — is a second header button instead, `app/text-size.ts`: small
+/ medium / large on `<html data-text-size>`, remembered in `localStorage`
+beside the theme and painted in `main.tsx` before the first render. It moves
+the **root font size**, so everything sized in rem — which is the whole UI,
+spacing included — grows with it, and `?text=large` picks one for a page
+load. The two halves are one decision: putting pinch-zoom back is the only
+thing that would make the button optional. Desktop
 shows a sidebar stepper; phones get a compact strip and a sticky bottom nav.
 **Both viewports are primary**; check every visible change at both.
 
@@ -442,8 +457,13 @@ Modelled on the notes app.
 - Dependabot watches npm (root and `tauri/`), cargo and actions weekly.
 
 Conventional Commits; PRs squash-merge, so the PR title is the commit.
-`BUILD_LABEL` (`<version>.<run>[-pre|-br]`) shows in the footer and
-`version.json`.
+`BUILD_LABEL` (`<version>.<run>[-pre|-br]`) goes into `version.json` — which
+is what the self-update compares — and into the footer, which is the whole
+footer: `v<label>+<commit>`, linked at that commit on GitHub. The commit is
+`__BUILD_COMMIT__`, from `GITHUB_SHA` or `git rev-parse` at build time
+(`vite.config.ts`), and a build that has neither shows the label alone. Don't
+put anything else down there: a screenshot of it should be enough to check
+out what the reporter was running.
 
 ## State of things / known follow-ups
 

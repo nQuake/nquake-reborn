@@ -5,6 +5,7 @@ import { ExternalIcon } from "../icons.tsx";
 import {
   Button,
   Callout,
+  CommandBlock,
   ExternalLink,
   KeyValue,
   SectionTitle,
@@ -28,6 +29,7 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
   // the first run; every generated script sets its own bit when run with `sh`.
   const sh = (script: string) =>
     folder?.picked.canSetExecutable ? `./${script}` : `sh ${script}`;
+  const folderName = (caps.realInstall && folder?.picked.name) || "nquake";
   // The firewall ports are already listed in the server table above.
   const visibleNotes = [
     ...(plan?.notes ?? []).filter((n) => !n.startsWith("Open UDP")),
@@ -87,12 +89,11 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
             <code>{r.fixupScript}</code> once to put them under their real names
             — it is a plain text file, so you can read it first.
           </p>
-          <code className="mt-2 block rounded-md border border-line bg-page-bg p-2 font-mono text-xs">
-            cd /d &quot;C:\path\to\
-            {(caps.realInstall && folder?.picked.name) || "nquake"}&quot;
-            <br />
-            {r.fixupScript}
-          </code>
+          <CommandBlock
+            className="mt-2"
+            command={`cd /d "C:\\path\\to\\${folderName}"\n${r.fixupScript}`}
+            label="Copy the finish-the-install command"
+          />
           <p className="mt-2 text-xs text-muted">
             The desktop app writes these files directly and needs no such step.
           </p>
@@ -118,27 +119,31 @@ export function DoneStep({ ctx }: { ctx: WizardCtx }) {
             </p>
           )}
           {o.platform === "linux" && (
-            <p className="text-sm">
+            <div className="text-sm">
               In a terminal, from the nQuake folder:
-              <code className="mt-2 block rounded-md border border-line bg-page-bg p-2 font-mono text-xs">
-                {sh("start_ezquake.sh")}
-              </code>
+              <CommandBlock
+                className="mt-2"
+                command={sh("start_ezquake.sh")}
+                label="Copy the launch command"
+              />
               <span className="mt-2 block text-xs text-muted">
                 After the first run <code>./start_ezquake.sh</code> works too.
               </span>
-            </p>
+            </div>
           )}
           {o.platform === "macos" && (
-            <p className="text-sm">
+            <div className="text-sm">
               In a terminal, from the nQuake folder:
-              <code className="mt-2 block rounded-md border border-line bg-page-bg p-2 font-mono text-xs">
-                {sh("start_ezquake.sh")}
-              </code>
+              <CommandBlock
+                className="mt-2"
+                command={sh("start_ezquake.sh")}
+                label="Copy the launch command"
+              />
               <span className="mt-2 block text-xs text-muted">
                 It opens <code>ezQuake.app</code> — after that you can launch it
                 from Finder.
               </span>
-            </p>
+            </div>
           )}
         </div>
       )}

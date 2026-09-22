@@ -3,6 +3,7 @@
 declare const __APP_VERSION__: string;
 declare const __BUILD_LABEL__: string;
 declare const __APP_NAME__: string;
+declare const __BUILD_COMMIT__: string;
 
 interface ImportMetaEnv {
   readonly VITE_DISTFILES_REPO?: string;

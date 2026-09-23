@@ -102,8 +102,8 @@ jobs:
           give a browser folder access (or whose browser can't grant it).
           `aarch64` is Apple Silicon, `x64` is Intel.
 
-          **macOS:** download the `.zip` for your Mac and open it; `nQuake.app`
-          runs from wherever it lands — it is an installer, so there is nothing
+          **macOS:** download the `.zip` for your Mac and open it;
+          `nQuake Installer.app` runs from wherever it lands — it is an installer, so there is nothing
           to move into Applications. The app is not notarized, so the first
           launch is refused: right-click the app and choose **Open**, or go to
           **System Settings → Privacy & Security** and choose **Open Anyway**.
@@ -258,8 +258,8 @@ jobs:
           ARCH: ${{ matrix.name == 'macos-aarch64' && 'aarch64' || 'x64' }}
         run: |
           BUNDLE="tauri/src-tauri/target/${TRIPLE}/release/bundle/macos"
-          ZIP="nQuake_${VERSION}_${ARCH}.zip"
-          ditto -c -k --sequesterRsrc --keepParent "${BUNDLE}/nQuake.app" "$ZIP"
+          ZIP="nQuake-Installer_${VERSION}_${ARCH}.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${BUNDLE}/nQuake Installer.app" "$ZIP"
           gh release upload "$TAG" "$ZIP" --clobber
 
   publish:

@@ -476,9 +476,11 @@ Modelled on the notes app.
   (`compute-bump.mjs`, `breaking: true` → major, Added/Changed → minor,
   Fixed → patch), collate `CHANGELOG.md`, bump `package.json`, tag `vX.Y.Z`,
   create a **draft** release, build Tauri bundles for Windows x64, macOS
-  arm64 + x64 and Linux x64 and attach them (`tauri-apps/tauri-action`, except
-  macOS: `nQuake Installer.app` zipped with `ditto`, never a DMG — it is an
-  installer, so it runs from Downloads rather than asking to be moved to Applications),
+  arm64 + x64 and Linux x64 with `tauri build` and attach them under
+  lowercase names (`nquake-installer_<version>_…`; the app itself is "nQuake
+  Installer"). macOS gets the `.app` zipped with `ditto`, never a DMG — it is
+  an installer, so it runs from Downloads rather than asking to be moved to
+  Applications. Then
   publish, and chain into `pages.yml`. Signing secrets are optional
   (`APPLE_*`); unsigned builds get the Gatekeeper / SmartScreen note in the
   release body.

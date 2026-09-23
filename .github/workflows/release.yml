@@ -158,15 +158,23 @@ jobs:
           - name: windows-x64
             os: windows-latest
             args: ""
+            triple: ""
+            arch: x64
           - name: macos-aarch64
             os: macos-latest
             args: "--target aarch64-apple-darwin"
+            triple: aarch64-apple-darwin
+            arch: aarch64
           - name: macos-x64
             os: macos-latest
             args: "--target x86_64-apple-darwin"
+            triple: x86_64-apple-darwin
+            arch: x64
           - name: linux-x64
             os: ubuntu-22.04
             args: ""
+            triple: ""
+            arch: amd64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -226,41 +234,51 @@ jobs:
           echo "macOS signing enabled."
 
       # Builds the web app (beforeBuildCommand → `npm run build:tauri`),
-      # compiles the shell, bundles, and uploads onto the draft release.
-      - uses: tauri-apps/tauri-action@v0
-        if: ${{ !startsWith(matrix.os, 'macos') }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: tauri
-          tagName: ${{ needs.release.outputs.tag }}
-          releaseId: ""
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+      # compiles the shell and bundles it: msi + nsis on Windows, AppImage +
+      # deb on Linux, and on macOS the bare app — not a DMG. A DMG with an
+      # Applications link says "install me", and this *is* the installer: it
+      # should run straight from Downloads and be thrown away afterwards.
+      - name: Build desktop bundles
+        shell: bash
+        run: npm --prefix tauri run build -- ${{ matrix.args }}
 
-      # macOS ships the bare app, zipped — not a DMG. A DMG with an
-      # Applications link says "install me", and this *is* the installer:
-      # it should run straight from Downloads and be thrown away afterwards.
-      # Safari unpacks the zip on download; `ditto` keeps the bundle's
-      # symlinks, permissions and extended attributes intact.
-      - name: Build macOS app
-        if: startsWith(matrix.os, 'macos')
-        run: npm --prefix tauri run build -- --bundles app ${{ matrix.args }}
-      - name: Zip and upload macOS app
-        if: startsWith(matrix.os, 'macos')
+      # Tauri names bundles after productName ("nQuake Installer_0.4.0_…"),
+      # and GitHub would turn the space into a dot. Release assets are
+      # lowercase and hyphenated instead: nquake-installer_0.4.0_x64-setup.exe.
+      # The macOS app is zipped with `ditto`, which keeps the bundle's
+      # symlinks, permissions and extended attributes intact; Safari unpacks
+      # it on download.
+      - name: Upload desktop bundles
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.release.outputs.tag }}
           VERSION: ${{ needs.release.outputs.version }}
-          TRIPLE: ${{ matrix.name == 'macos-aarch64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}
-          ARCH: ${{ matrix.name == 'macos-aarch64' && 'aarch64' || 'x64' }}
+          TRIPLE: ${{ matrix.triple }}
+          ARCH: ${{ matrix.arch }}
         run: |
-          BUNDLE="tauri/src-tauri/target/${TRIPLE}/release/bundle/macos"
-          ZIP="nQuake-Installer_${VERSION}_${ARCH}.zip"
-          ditto -c -k --sequesterRsrc --keepParent "${BUNDLE}/nQuake Installer.app" "$ZIP"
-          gh release upload "$TAG" "$ZIP" --clobber
+          set -euo pipefail
+          shopt -s nullglob
+          BUNDLE="tauri/src-tauri/target/${TRIPLE:+$TRIPLE/}release/bundle"
+          OUT=release-assets
+          mkdir -p "$OUT"
+          for f in "$BUNDLE"/msi/*.msi "$BUNDLE"/nsis/*.exe \
+                   "$BUNDLE"/appimage/*.AppImage "$BUNDLE"/deb/*.deb; do
+            name=$(basename "$f" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+            cp "$f" "$OUT/$name"
+          done
+          for app in "$BUNDLE"/macos/*.app; do
+            ditto -c -k --sequesterRsrc --keepParent "$app" \
+              "$OUT/nquake-installer_${VERSION}_${ARCH}.zip"
+          done
+          assets=("$OUT"/*)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "::error::no bundles found under $BUNDLE"
+            exit 1
+          fi
+          printf 'asset: %s\n' "${assets[@]}"
+          gh release upload "$TAG" "${assets[@]}" --clobber
 
   publish:
     needs: [release, desktop]

@@ -36,12 +36,13 @@ Bundles land in `tauri/src-tauri/target/release/bundle/`. The Release
 workflow builds them for Windows, macOS (Intel and Apple Silicon) and Linux
 and attaches them to the GitHub Release.
 
-The app is called nQuake Installer on every platform, and macOS gets
-`nQuake Installer.app` in a zip, not a DMG. The app is the installer, not the
-game: a DMG with an Applications shortcut tells people to install it,
-when it should run from wherever it was unpacked and be thrown away after.
-The workflow builds `--bundles app` and zips it with `ditto` itself rather
-than letting `tauri-action` upload a DMG.
+The app is called nQuake Installer on every platform; the release assets are
+the same name lowercased and hyphenated (`nquake-installer_0.4.0_x64-setup.exe`,
+`nquake-installer_0.4.0_aarch64.zip`), renamed by the workflow after
+`tauri build`. macOS gets `nQuake Installer.app` in a zip, not a DMG. The app
+is the installer, not the game: a DMG with an Applications shortcut tells
+people to install it, when it should run from wherever it was unpacked and be
+thrown away after.
 
 `npm --prefix tauri run dev` opens the window on the Vite dev server for
 live reload.

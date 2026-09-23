@@ -1,6 +1,6 @@
 {
   "name": "nquake-reborn",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "nQuake reborn as a web installer: set up a QuakeWorld client or server straight from the browser.",
   "license": "GPL-2.0-or-later",
   "type": "module",

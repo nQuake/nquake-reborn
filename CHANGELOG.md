@@ -11,6 +11,18 @@ fragments** in `.changes/unreleased/` — add a fragment per user-visible change
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-23
+
+### Added
+
+- **The install log shows every file as it downloads** — Each file in flight now has a spinner, a percentage, its bytes so far and a fill behind its row, so the log shows what is downloading as well as what has landed. When the downloads finish, the log says what the installer is doing next (packing configs into `configs.pk3`, writing the install record and readme), and each packed archive appears in the log like any other file.
+
+### Changed
+
+- **Reloading the page or clicking the nQuake logo starts a clean install** — A refresh used to put you back where you were, with every answer filled in. Now a refresh, a reopened tab or a click on the nQuake wordmark starts over from the welcome step. Only the installer reloading itself into a newer version keeps your answers, and a refresh after that is a plain refresh again.
+- **Add-ons are their own step in Advanced mode** — Textures, Team Fortress and Clan Arena are game content, not settings for the client, so they've moved off the Client step onto a new Add-ons step right after it. The Client step now holds the choice of ezQuake build and the optional `pak1.pak`.
+- **The desktop app is called "nQuake Installer", and on macOS it is a zip you run** — The desktop app and its window are now called nQuake Installer rather than nQuake, on every platform — it is the installer, not the game — and the release downloads are named `nquake-installer_<version>_…` in lowercase. On macOS the download used to be a disk image with the app beside an Applications shortcut, which reads like a game to install; it is now `nQuake Installer.app` in a zip: open it and run it straight from Downloads, no copying into Applications.
+
 ## [0.3.0] - 2026-09-23
 
 ### Added

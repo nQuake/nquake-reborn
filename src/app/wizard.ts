@@ -24,6 +24,7 @@ import type { Platform } from "../domain/platform.ts";
 import { buildPlan, type InstallPlan } from "../domain/plan.ts";
 import {
   captureSession,
+  sessionToResume,
   folderIsRestorable,
   type SaveReason,
   type SavedFolder,
@@ -59,6 +60,7 @@ export type StepId =
   | "welcome"
   | "target"
   | "client"
+  | "addons"
   | "config"
   | "server"
   | "folder"
@@ -70,6 +72,7 @@ const STEP_LABELS: Record<StepId, string> = {
   welcome: "Welcome",
   target: "What to install",
   client: "Client",
+  addons: "Add-ons",
   config: "Your setup",
   server: "Server",
   folder: "Folder",
@@ -94,7 +97,7 @@ export function stepsFor(
 ): (StepInfo & { id: StepId })[] {
   const ids: StepId[] = ["welcome", "target"];
   if (mode === "advanced") {
-    if (wantsClient(options)) ids.push("client", "config");
+    if (wantsClient(options)) ids.push("client", "addons", "config");
     if (wantsServer(options)) ids.push("server");
   }
   ids.push("folder", "review", "install", "done");
@@ -283,11 +286,15 @@ async function reopenFolder(
 
 export function useWizard(caps: Capabilities): WizardCtx {
   const initialPlatform = QUERY.platform ?? caps.platform ?? "windows";
-  // Read once, at mount, before the autosave below writes over it. State
-  // rather than a memo so "start over" can forget it was ever restored.
-  const [restored, setRestored] = useState<SavedSession | null>(() =>
-    QUERY.fresh ? null : readSavedSession(initialPlatform),
-  );
+  // Read once, at mount, and used up: only a self-update's reload comes back
+  // with its answers (`sessionToResume`), and a refresh after that is a
+  // refresh like any other. State rather than a memo so "start over" can
+  // forget it was ever restored.
+  const [restored, setRestored] = useState<SavedSession | null>(() => {
+    const saved = QUERY.fresh ? null : readSavedSession(initialPlatform);
+    clearSavedSession();
+    return sessionToResume(saved);
+  });
   const [options, setOptionsState] = useState<InstallOptions>(() => {
     const base = restored?.options ?? defaultOptions(initialPlatform);
     return {
@@ -433,10 +440,9 @@ export function useWizard(caps: Capabilities): WizardCtx {
 
   // ---- Saving the answers
   //
-  // Written on every change rather than only on the way into an update: a
-  // reload we did not start (a refresh, a crashed tab, a laptop lid) costs
-  // the user the same typing, and `sessionStorage` is a few hundred bytes
-  // and a synchronous write.
+  // Only on the way into a self-update (`useSelfUpdate` calls this right
+  // before it reloads). Any other reload — a refresh, the wordmark — is
+  // meant to start a clean install, so nothing is written for it to find.
   const saveNow = useCallback(
     (reason: SaveReason, target?: string | null) => {
       writeSavedSession(
@@ -463,7 +469,6 @@ export function useWizard(caps: Capabilities): WizardCtx {
     },
     [mode, step, options, folder, pak1],
   );
-  useEffect(() => saveNow("autosave"), [saveNow]);
 
   // ---- Install run
   const [run, setRun] = useState<InstallRunState>({
@@ -551,8 +556,7 @@ export function useWizard(caps: Capabilities): WizardCtx {
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
-    // Starting over means starting over: the autosave effect writes the fresh
-    // state back a tick later, so nothing stale survives.
+    // Starting over means starting over.
     clearSavedSession();
     setRestored(null);
     setRun({ status: "idle", progress: null, log: [], result: null });

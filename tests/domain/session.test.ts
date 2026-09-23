@@ -6,6 +6,7 @@ import {
   folderIsRestorable,
   parseSession,
   sanitizeOptions,
+  sessionToResume,
   SESSION_MAX_AGE_MS,
   SESSION_SCHEMA,
 } from "../../src/domain/session.ts";
@@ -90,6 +91,23 @@ describe("a session across a reload", () => {
     for (const junk of [null, "nope", 7, [], {}, { schema: SESSION_SCHEMA }]) {
       expect(parseSession(junk, { platform: "linux", now: NOW })).toBeNull();
     }
+  });
+});
+
+describe("which reloads resume", () => {
+  it("resumes only the reload a self-update started", () => {
+    const update = parseSession(saved(), { platform: "linux", now: NOW });
+    expect(sessionToResume(update)).toBe(update);
+  });
+
+  it("starts a refresh from scratch", () => {
+    const autosave = parseSession(saved({ reason: "autosave" }), {
+      platform: "linux",
+      now: NOW,
+    });
+    expect(autosave).not.toBeNull();
+    expect(sessionToResume(autosave)).toBeNull();
+    expect(sessionToResume(null)).toBeNull();
   });
 });
 

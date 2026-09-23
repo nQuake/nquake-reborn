@@ -21,6 +21,7 @@ import {
 } from "../ui/icons.tsx";
 import { Button, Callout, Card } from "../ui/primitives.tsx";
 import { Stepper, StepperCompact } from "../ui/Stepper.tsx";
+import { AddonsStep } from "../ui/steps/AddonsStep.tsx";
 import { ClientStep } from "../ui/steps/ClientStep.tsx";
 import { ConfigStep } from "../ui/steps/ConfigStep.tsx";
 import { DoneStep } from "../ui/steps/DoneStep.tsx";
@@ -51,7 +52,8 @@ import {
 const TITLES: Record<StepId, { title: string; lead: string }> = {
   welcome: { title: "Welcome", lead: "QuakeWorld in a few clicks." },
   target: { title: "What to install", lead: "Play, host, or both." },
-  client: { title: "Client", lead: "Which ezQuake, and what to bring along." },
+  client: { title: "Client", lead: "Which ezQuake, and which Quake." },
+  addons: { title: "Add-ons", lead: "Textures and mods to bring along." },
   config: {
     title: "Your setup",
     lead: "A minute here saves you an evening in the console.",
@@ -70,6 +72,7 @@ const STEP_VIEW: Record<
   welcome: WelcomeStep,
   target: TargetStep,
   client: ClientStep,
+  addons: AddonsStep,
   config: ConfigStep,
   server: ServerStep,
   folder: FolderStep,
@@ -127,6 +130,15 @@ export function App({ caps }: { caps: Capabilities }) {
         >
           <a
             href={BASE_URL}
+            onClick={(e) => {
+              // A plain click starts over in place — the same clean installer
+              // a reload gives, without refetching the catalog or dropping
+              // `?mock=1`. Modified clicks still open a new tab.
+              if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey)
+                return;
+              e.preventDefault();
+              ctx.reset();
+            }}
             className="flex items-baseline gap-3 no-underline"
             aria-label="nQuake"
           >

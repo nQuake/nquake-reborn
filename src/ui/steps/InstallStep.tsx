@@ -14,16 +14,52 @@ const LOG_ROWS = 10;
 
 /**
  * The install's running log: what has landed, newest at the bottom, with
- * whatever is downloading right now underneath it — a terminal rather than
- * three truncated paths on one line. It follows the tail like `tail -f`
+ * whatever is downloading right now underneath it (a spinner, how far along
+ * it is, and a fill behind the row) and then whatever the run does once the
+ * downloads are over (packing configs, writing the record). A terminal
+ * rather than three truncated paths on one line. It follows the tail like `tail -f`
  * unless the user scrolls up to read something, and then leaves them alone.
  */
+/** A small turning mark for a line that is still happening. */
+function Spinner() {
+  // A ring a little wider than the `+` / `=` column it sits in, centred on
+  // it rather than squeezed into it, so file names stay aligned.
+  return (
+    <span className="relative w-[1ch] shrink-0" aria-hidden="true">
+      <svg
+        viewBox="0 0 16 16"
+        className="absolute left-1/2 top-1/2 h-[0.75rem] w-[0.75rem] -translate-x-1/2 -translate-y-1/2 animate-spin text-accent motion-reduce:animate-none"
+      >
+        <circle
+          cx="8"
+          cy="8"
+          r="6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          opacity="0.25"
+        />
+        <path
+          d="M8 2a6 6 0 0 1 6 6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
 function FileLog({
   progress,
   running,
+  sizes,
 }: {
   progress: InstallProgress;
   running: boolean;
+  /** Each planned file's size by destination, for the in-flight percentages. */
+  sizes: ReadonlyMap<string, number>;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
@@ -32,7 +68,7 @@ function FileLog({
   useEffect(() => {
     const el = box.current;
     if (el && follow) el.scrollTo(0, el.scrollHeight);
-  }, [lines, progress.active, follow]);
+  }, [lines, progress.active, progress.finishing, follow]);
 
   return (
     <div
@@ -72,15 +108,45 @@ function FileLog({
         </div>
       ))}
       {running &&
-        progress.active.map((dest) => (
-          <div key={dest} className="flex gap-2 text-muted">
-            <span aria-hidden="true">…</span>
-            <span className="min-w-0 flex-1 break-all">{dest}</span>
-          </div>
-        ))}
-      {running && progress.active.length === 0 && lines.length === 0 && (
-        <div className="text-muted">Preparing…</div>
+        progress.active.map((dest) => {
+          const size = sizes.get(dest) ?? 0;
+          const got = progress.items.get(dest)?.bytes ?? 0;
+          const pct = size > 0 ? Math.min(100, (got / size) * 100) : 0;
+          return (
+            <div
+              key={dest}
+              data-testid="install-log-active"
+              className="-mx-1.5 flex gap-2 rounded-sm px-1.5"
+              style={{
+                // The row fills as the file arrives, like a progress bar
+                // drawn behind the text. It reaches out past the spinner on
+                // the left, so the bar starts before the line does.
+                background: `linear-gradient(to right, var(--accent-wash) ${pct}%, transparent ${pct}%)`,
+              }}
+            >
+              <Spinner />
+              <span className="min-w-0 flex-1 break-all text-fg">{dest}</span>
+              <span className="shrink-0 tabular-nums text-accent">
+                {size > 0 ? `${Math.floor(pct)}%` : "…"}
+              </span>
+              <span className="hidden shrink-0 tabular-nums text-muted sm:inline">
+                {formatBytes(got)} / {formatBytes(size)}
+              </span>
+            </div>
+          );
+        })}
+      {running && progress.finishing && (
+        <div data-testid="install-log-finishing" className="flex gap-2">
+          <Spinner />
+          <span className="min-w-0 flex-1 break-all text-fg">
+            {progress.finishing}…
+          </span>
+        </div>
       )}
+      {running &&
+        progress.active.length === 0 &&
+        !progress.finishing &&
+        lines.length === 0 && <div className="text-muted">Preparing…</div>}
     </div>
   );
 }
@@ -128,6 +194,10 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
   }, [plan, p, detailed]);
 
   const running = run.status === "running";
+  const sizes = useMemo(
+    () => new Map((plan?.items ?? []).map((i) => [i.dest, i.size] as const)),
+    [plan],
+  );
   const failedItems = run.result?.failed ?? [];
 
   return (
@@ -221,7 +291,7 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
       {/* The files going past are the proof that something is happening, so
           this stays in Simple mode too. */}
       {p && (run.status !== "idle" || p.recent.length > 0) && (
-        <FileLog progress={p} running={running} />
+        <FileLog progress={p} running={running} sizes={sizes} />
       )}
 
       {run.status === "failed" && (

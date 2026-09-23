@@ -185,6 +185,9 @@ Keep both in step with `paths.ts`: if either list grows, so should ours.
   answers coming back *wrong* after one is `sanitizeOptions`; a report of a
   page reloading over and over is the `MAX_RELOAD_ATTEMPTS` guard failing to
   hold, in `domain/update.ts`. `?update=off` stops it while you look.
+- **"I refreshed and lost my answers" is the design.** Only the self-update's
+  own reload carries them (`sessionToResume`); a refresh or a click on the
+  wordmark is a clean install on purpose.
 
 ## Poking at a running app
 

@@ -2,8 +2,6 @@ import { useState } from "preact/hooks";
 
 import type { WizardCtx } from "../../app/wizard.ts";
 import { formatBytes } from "../../domain/format.ts";
-import { packageBytes } from "../../domain/manifest.ts";
-import { installsTextures } from "../../domain/options.ts";
 import { PAK1_SIZE } from "../../domain/plan.ts";
 import { UPSTREAM_TARGET } from "../../domain/platform.ts";
 import {
@@ -13,14 +11,11 @@ import {
   ChoiceCard,
   ExternalLink,
   SectionTitle,
-  Toggle,
 } from "../primitives.tsx";
 
 export function ClientStep({ ctx }: { ctx: WizardCtx }) {
   const { options, setOptions, catalog, pak1, setPak1 } = ctx;
   const c = options.client;
-  const m = catalog.manifest;
-  const size = (pkg: string) => (m ? formatBytes(packageBytes(m, pkg)) : "");
   const ez = catalog.upstream?.components.ezquake;
   const ezTarget = UPSTREAM_TARGET.ezquake[options.platform];
   const latestAvailable = !!(ez && ezTarget && ez.targets[ezTarget]);
@@ -80,51 +75,6 @@ export function ClientStep({ ctx }: { ctx: WizardCtx }) {
                 ? "The ezQuake build shipped in the nQuake distribution files. Older, but known to work with these configs."
                 : "nQuake ships no usable Linux binary; the latest release is the only option."
             }
-          />
-        </div>
-      </div>
-
-      <div>
-        <SectionTitle hint="Optional extras. Sizes are what gets downloaded.">
-          Add-ons
-        </SectionTitle>
-        <div className="flex flex-col gap-2">
-          <Toggle
-            testId="opt-textures"
-            label="24-bit textures"
-            hint={
-              c.hdTextures
-                ? "Not needed: the QRP textures below replace these."
-                : "Replacement world textures for the standard maps. Recommended."
-            }
-            meta={size("textures")}
-            checked={installsTextures(c)}
-            disabled={c.hdTextures}
-            onChange={(v) => setClient({ textures: v })}
-          />
-          <Toggle
-            testId="opt-hd-textures"
-            label="High-resolution textures (QRP)"
-            hint="The Quake Retexturing Project packs — much sharper, much bigger."
-            meta={size("addon-textures")}
-            checked={c.hdTextures}
-            onChange={(v) => setClient({ hdTextures: v })}
-          />
-          <Toggle
-            testId="opt-fortress"
-            label="Team Fortress"
-            hint="The classic class-based mod, with its maps."
-            meta={size("addon-fortress")}
-            checked={c.teamFortress}
-            onChange={(v) => setClient({ teamFortress: v })}
-          />
-          <Toggle
-            testId="opt-clanarena"
-            label="Clan Arena"
-            hint="Round-based team mode (Arena + Prox)."
-            meta={size("addon-clanarena")}
-            checked={c.clanArena}
-            onChange={(v) => setClient({ clanArena: v })}
           />
         </div>
       </div>

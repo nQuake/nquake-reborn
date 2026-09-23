@@ -34,6 +34,7 @@ describe("stepsFor", () => {
       "welcome",
       "target",
       "client",
+      "addons",
       "config",
       "server",
       "folder",
@@ -43,6 +44,7 @@ describe("stepsFor", () => {
     ]);
     o.target = "server";
     expect(stepsFor(o, "advanced").map((s) => s.id)).not.toContain("config");
+    expect(stepsFor(o, "advanced").map((s) => s.id)).not.toContain("addons");
   });
 
   it("starts from QuakeWorld's standard ports and the newest builds", () => {

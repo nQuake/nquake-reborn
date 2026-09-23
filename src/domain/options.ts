@@ -26,7 +26,10 @@ export interface ClientConfig {
 export interface ClientOptions {
   /** `latest` pulls the newest ezQuake from the upstream mirror; `bundled` uses the copy in distfiles. */
   ezquakeSource: "latest" | "bundled";
-  /** The standard 24-bit texture pack (`textures`, ~21 MB). */
+  /**
+   * The standard 24-bit texture pack (`textures`, ~21 MB). Kept as asked
+   * while `hdTextures` is on but not installed — see `installsTextures`.
+   */
   textures: boolean;
   /** The QRP high-resolution texture pack (`addon-textures`, ~400 MB). */
   hdTextures: boolean;
@@ -169,4 +172,14 @@ export function passwordFromBytes(bytes: Uint8Array, length = 12): string {
     out += alphabet[(bytes[i] ?? 0) % alphabet.length];
   }
   return out;
+}
+
+/**
+ * Whether the standard 24-bit pack goes in. QRP replaces the same world
+ * textures, so with it on the smaller pack would only be downloaded to be
+ * overridden. The answer itself is left alone, so turning QRP back off
+ * brings the 24-bit pack back.
+ */
+export function installsTextures(c: ClientOptions): boolean {
+  return c.textures && !c.hdTextures;
 }

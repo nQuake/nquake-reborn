@@ -1,8 +1,15 @@
 import type { WizardCtx } from "../../app/wizard.ts";
 import { formatBytes } from "../../domain/format.ts";
+import { installsTextures } from "../../domain/options.ts";
 import { platformLabel } from "../../domain/platform.ts";
 import { displayPath } from "../../platform/destination.ts";
-import { Button, Callout, KeyValue, SectionTitle } from "../primitives.tsx";
+import {
+  Button,
+  Callout,
+  InfoTip,
+  KeyValue,
+  SectionTitle,
+} from "../primitives.tsx";
 
 export function ReviewStep({ ctx }: { ctx: WizardCtx }) {
   const { options: o, plan, folder, catalog, mode, setMode, goTo } = ctx;
@@ -36,12 +43,13 @@ export function ReviewStep({ ctx }: { ctx: WizardCtx }) {
     ["Platform", platformLabel(o.platform)],
     [
       "Folder",
-      <span className="flex flex-col items-end">
+      <span className="inline-flex items-center justify-end gap-1.5">
         <span className="font-mono break-all">{folderName}</span>
         {!folder.picked.path && (
-          <span className="text-xs text-muted">
-            the folder you picked (a browser only shares its name)
-          </span>
+          <InfoTip label="Why only the folder's name?" testId="folder-info">
+            This is the folder you picked. A browser only shares a folder's name
+            with the page, never its full path.
+          </InfoTip>
         )}
       </span>,
     ],
@@ -68,7 +76,7 @@ export function ReviewStep({ ctx }: { ctx: WizardCtx }) {
         [
           "Client add-ons",
           [
-            c.textures && "24-bit textures",
+            installsTextures(c) && "24-bit textures",
             c.hdTextures && "HD textures",
             c.teamFortress && "Team Fortress",
             c.clanArena && "Clan Arena",

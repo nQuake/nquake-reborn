@@ -192,6 +192,8 @@ describe("buildPlan — client", () => {
     expect(d).toContain("ezquake/configs/preset.cfg");
     const groups = Object.fromEntries(plan.groups.map((g) => [g.id, g.bytes]));
     expect(groups["hd-textures"]).toBe(5000);
+    // QRP overrides the 24-bit pack, so that one is left out.
+    expect(groups.textures).toBeUndefined();
     expect(plan.downloadBytes).toBeLessThan(plan.totalBytes);
   });
 

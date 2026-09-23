@@ -3,6 +3,7 @@ import { useState } from "preact/hooks";
 import type { WizardCtx } from "../../app/wizard.ts";
 import { formatBytes } from "../../domain/format.ts";
 import { packageBytes } from "../../domain/manifest.ts";
+import { installsTextures } from "../../domain/options.ts";
 import { PAK1_SIZE } from "../../domain/plan.ts";
 import { UPSTREAM_TARGET } from "../../domain/platform.ts";
 import {
@@ -91,9 +92,14 @@ export function ClientStep({ ctx }: { ctx: WizardCtx }) {
           <Toggle
             testId="opt-textures"
             label="24-bit textures"
-            hint="Replacement world textures for the standard maps. Recommended."
+            hint={
+              c.hdTextures
+                ? "Not needed: the QRP textures below replace these."
+                : "Replacement world textures for the standard maps. Recommended."
+            }
             meta={size("textures")}
-            checked={c.textures}
+            checked={installsTextures(c)}
+            disabled={c.hdTextures}
             onChange={(v) => setClient({ textures: v })}
           />
           <Toggle

@@ -17,7 +17,12 @@ import {
   type GameServer,
 } from "./configs.ts";
 import type { Manifest, ManifestFile } from "./manifest.ts";
-import { wantsClient, wantsServer, type InstallOptions } from "./options.ts";
+import {
+  installsTextures,
+  wantsClient,
+  wantsServer,
+  type InstallOptions,
+} from "./options.ts";
 import { UPSTREAM_TARGET, type Platform } from "./platform.ts";
 import type { Upstream, UpstreamComponent } from "./upstream.ts";
 
@@ -272,7 +277,7 @@ export function buildPlan(
         executable: (p) => /\/MacOS\/[^/]+$/.test(p),
       });
     }
-    if (c.textures) b.pkg("textures", "textures");
+    if (installsTextures(c)) b.pkg("textures", "textures");
     if (c.hdTextures) b.pkg("addon-textures", "hd-textures");
     if (c.teamFortress) b.pkg("addon-fortress", "addon-fortress");
     if (c.clanArena) b.pkg("addon-clanarena", "addon-clanarena");

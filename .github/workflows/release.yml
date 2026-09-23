@@ -102,9 +102,11 @@ jobs:
           give a browser folder access (or whose browser can't grant it).
           `aarch64` is Apple Silicon, `x64` is Intel.
 
-          **macOS:** the app is not notarized, so the first launch is refused.
-          Right-click the app and choose **Open**, or go to **System Settings →
-          Privacy & Security** and choose **Open Anyway**.
+          **macOS:** download the `.zip` for your Mac and open it; `nQuake.app`
+          runs from wherever it lands — it is an installer, so there is nothing
+          to move into Applications. The app is not notarized, so the first
+          launch is refused: right-click the app and choose **Open**, or go to
+          **System Settings → Privacy & Security** and choose **Open Anyway**.
 
           **Windows:** SmartScreen may warn about an unknown publisher; choose
           **More info → Run anyway**.
@@ -226,6 +228,7 @@ jobs:
       # Builds the web app (beforeBuildCommand → `npm run build:tauri`),
       # compiles the shell, bundles, and uploads onto the draft release.
       - uses: tauri-apps/tauri-action@v0
+        if: ${{ !startsWith(matrix.os, 'macos') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -235,6 +238,29 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # macOS ships the bare app, zipped — not a DMG. A DMG with an
+      # Applications link says "install me", and this *is* the installer:
+      # it should run straight from Downloads and be thrown away afterwards.
+      # Safari unpacks the zip on download; `ditto` keeps the bundle's
+      # symlinks, permissions and extended attributes intact.
+      - name: Build macOS app
+        if: startsWith(matrix.os, 'macos')
+        run: npm --prefix tauri run build -- --bundles app ${{ matrix.args }}
+      - name: Zip and upload macOS app
+        if: startsWith(matrix.os, 'macos')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release.outputs.tag }}
+          VERSION: ${{ needs.release.outputs.version }}
+          TRIPLE: ${{ matrix.name == 'macos-aarch64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}
+          ARCH: ${{ matrix.name == 'macos-aarch64' && 'aarch64' || 'x64' }}
+        run: |
+          BUNDLE="tauri/src-tauri/target/${TRIPLE}/release/bundle/macos"
+          ZIP="nQuake_${VERSION}_${ARCH}.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${BUNDLE}/nQuake.app" "$ZIP"
+          gh release upload "$TAG" "$ZIP" --clobber
 
   publish:
     needs: [release, desktop]

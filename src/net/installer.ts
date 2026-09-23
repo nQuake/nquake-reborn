@@ -79,6 +79,12 @@ export interface InstallProgress {
    * landed, which is what the install screen shows as a log.
    */
   recent: FinishedItem[];
+  /**
+   * What the run is doing once the downloads are over — packing an archive,
+   * writing the install record — or null while files are still coming in.
+   * Those steps download nothing, so without it the log would sit still.
+   */
+  finishing: string | null;
   items: ReadonlyMap<string, ItemProgress>;
 }
 
@@ -215,6 +221,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       recent.splice(0, recent.length - RECENT_LIMIT);
   };
   let lastEmit = 0;
+  let finishing: string | null = null;
 
   const log = (level: InstallLogEntry["level"], message: string) =>
     args.onLog?.({ level, message, at: now() });
@@ -239,6 +246,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
         ) ?? meter.eta(bytesTotal - bytesDone, t),
       active: [...active],
       recent: [...recent],
+      finishing,
       items,
     });
   };
@@ -453,6 +461,11 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       ...state.options,
       server: { ...state.options.server, rconPassword: "", qtvPassword: "" },
     };
+    const step = (what: string) => {
+      finishing = what;
+      emit(true);
+    };
+    step(`Writing ${INSTALL_STATE_FILE}`);
     await destination.writeText(
       INSTALL_STATE_FILE,
       JSON.stringify(state, null, 2) + "\n",
@@ -483,11 +496,14 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     let packed = 0;
     for (const [path, pack] of packs) {
       const entries = [...pack.values()];
+      step(`Packing ${entries.length} config(s) into ${path}`);
+      const bytes = buildPk3(entries);
       const w = await destination.openWrite(path);
       const writer = w.getWriter();
-      await writer.write(buildPk3(entries));
+      await writer.write(bytes);
       await writer.close();
       archives.push(path);
+      finished(path, "done", bytes.byteLength);
       packed += entries.length;
     }
     if (packed) {
@@ -501,6 +517,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     // The one step a browser install on Windows cannot take itself.
     if (sidecars.length) {
       const script = renderFixupScript(sidecars, fixupBackup);
+      step(`Writing ${script.path}`);
       await destination.writeText(script.path, script.text);
       fixupScript = script.path;
       log(
@@ -510,6 +527,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
           `Double-click ${script.path} in the install folder to put them in place.`,
       );
     }
+    step("Writing README-nquake.txt");
     await destination.writeText(
       "README-nquake.txt",
       renderInstallReadme(options, plan, installerVersion, new Date(now()), {
@@ -521,6 +539,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
     );
     const executables = okItems.filter((i) => i.executable).map((i) => i.dest);
     if (executables.length && destination.canSetExecutable) {
+      step(`Marking ${executables.length} file(s) executable`);
       try {
         await destination.setExecutable(executables);
         log("info", `Marked ${executables.length} file(s) executable.`);
@@ -532,6 +551,7 @@ export async function runInstall(args: RunInstallArgs): Promise<InstallResult> {
       }
     }
   }
+  finishing = null;
   emit(true);
   return {
     ok: !cancelled && failed.length === 0,

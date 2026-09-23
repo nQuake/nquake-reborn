@@ -14,16 +14,33 @@ const LOG_ROWS = 10;
 
 /**
  * The install's running log: what has landed, newest at the bottom, with
- * whatever is downloading right now underneath it — a terminal rather than
- * three truncated paths on one line. It follows the tail like `tail -f`
+ * whatever is downloading right now underneath it (a spinner, how far along
+ * it is, and a fill behind the row) and then whatever the run does once the
+ * downloads are over (packing configs, writing the record). A terminal
+ * rather than three truncated paths on one line. It follows the tail like `tail -f`
  * unless the user scrolls up to read something, and then leaves them alone.
  */
+/** A small turning mark for a line that is still happening. */
+function Spinner() {
+  return (
+    <span className="flex w-[1ch] shrink-0 items-center justify-center">
+      <span
+        aria-hidden="true"
+        className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-[1.5px] border-accent border-t-transparent motion-reduce:animate-none"
+      />
+    </span>
+  );
+}
+
 function FileLog({
   progress,
   running,
+  sizes,
 }: {
   progress: InstallProgress;
   running: boolean;
+  /** Each planned file's size by destination, for the in-flight percentages. */
+  sizes: ReadonlyMap<string, number>;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
@@ -32,7 +49,7 @@ function FileLog({
   useEffect(() => {
     const el = box.current;
     if (el && follow) el.scrollTo(0, el.scrollHeight);
-  }, [lines, progress.active, follow]);
+  }, [lines, progress.active, progress.finishing, follow]);
 
   return (
     <div
@@ -72,15 +89,44 @@ function FileLog({
         </div>
       ))}
       {running &&
-        progress.active.map((dest) => (
-          <div key={dest} className="flex gap-2 text-muted">
-            <span aria-hidden="true">…</span>
-            <span className="min-w-0 flex-1 break-all">{dest}</span>
-          </div>
-        ))}
-      {running && progress.active.length === 0 && lines.length === 0 && (
-        <div className="text-muted">Preparing…</div>
+        progress.active.map((dest) => {
+          const size = sizes.get(dest) ?? 0;
+          const got = progress.items.get(dest)?.bytes ?? 0;
+          const pct = size > 0 ? Math.min(100, (got / size) * 100) : 0;
+          return (
+            <div
+              key={dest}
+              data-testid="install-log-active"
+              className="flex gap-2 rounded-sm"
+              style={{
+                // The row fills as the file arrives, like a progress bar
+                // drawn behind the text.
+                background: `linear-gradient(to right, var(--accent-wash) ${pct}%, transparent ${pct}%)`,
+              }}
+            >
+              <Spinner />
+              <span className="min-w-0 flex-1 break-all text-fg">{dest}</span>
+              <span className="shrink-0 tabular-nums text-accent">
+                {size > 0 ? `${Math.floor(pct)}%` : "…"}
+              </span>
+              <span className="hidden shrink-0 tabular-nums text-muted sm:inline">
+                {formatBytes(got)} / {formatBytes(size)}
+              </span>
+            </div>
+          );
+        })}
+      {running && progress.finishing && (
+        <div data-testid="install-log-finishing" className="flex gap-2">
+          <Spinner />
+          <span className="min-w-0 flex-1 break-all text-fg">
+            {progress.finishing}…
+          </span>
+        </div>
       )}
+      {running &&
+        progress.active.length === 0 &&
+        !progress.finishing &&
+        lines.length === 0 && <div className="text-muted">Preparing…</div>}
     </div>
   );
 }
@@ -128,6 +174,10 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
   }, [plan, p, detailed]);
 
   const running = run.status === "running";
+  const sizes = useMemo(
+    () => new Map((plan?.items ?? []).map((i) => [i.dest, i.size] as const)),
+    [plan],
+  );
   const failedItems = run.result?.failed ?? [];
 
   return (
@@ -221,7 +271,7 @@ export function InstallStep({ ctx }: { ctx: WizardCtx }) {
       {/* The files going past are the proof that something is happening, so
           this stays in Simple mode too. */}
       {p && (run.status !== "idle" || p.recent.length > 0) && (
-        <FileLog progress={p} running={running} />
+        <FileLog progress={p} running={running} sizes={sizes} />
       )}
 
       {run.status === "failed" && (

@@ -144,6 +144,7 @@ describe("runInstall", () => {
     options.client.config.name = "empezar";
     const plan = buildPlan(manifest, null, options);
     let recent: FinishedItem[] = [];
+    const finishing: (string | null)[] = [];
     await runInstall({
       plan,
       options,
@@ -154,8 +155,12 @@ describe("runInstall", () => {
       // The last emit is forced, so it carries the tail of the run.
       onProgress: (p) => {
         recent = p.recent;
+        finishing.push(p.finishing);
       },
     });
+    // The steps after the downloads are announced, and over by the last emit.
+    expect(finishing).toContain("Writing README-nquake.txt");
+    expect(finishing.at(-1)).toBeNull();
     expect(recent.length).toBeGreaterThan(0);
     expect(recent.length).toBeLessThanOrEqual(RECENT_LIMIT);
     // In the order things actually finished, and every one a real plan item.

@@ -18,10 +18,12 @@ The installer is three pure things and two impure ones.
   `start_ezquake.sh` client launcher and the start/stop scripts per platform.
   Every generated shell script chmods itself and what it launches, because a
   browser cannot set the executable bit.
-- **Session** (`src/domain/session.ts`) — what survives a reload, and how to
-  read it back. The page updates itself by reloading, so the wizard's answers
-  are written to session storage and merged over today's `defaultOptions` on
-  the way up: the build that wrote them is not the build that reads them.
+- **Session** (`src/domain/session.ts`) — what survives a self-update, and
+  how to read it back. The page updates itself by reloading, so the wizard's
+  answers are written to session storage just before that reload and merged
+  over today's `defaultOptions` on the way up: the build that wrote them is
+  not the build that reads them. Only that reload resumes
+  (`sessionToResume`); a refresh or the wordmark starts a clean install.
 - **Update** (`src/domain/update.ts`) — when the app may replace itself. Any
   change in the deployed build label counts; a running install is never
   interrupted, a reload that would cost the user a folder handle or a picked

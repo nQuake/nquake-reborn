@@ -2,8 +2,9 @@
 //
 // The installer is a static deploy that updates itself by reloading the page
 // (see `update.ts`), and a wizard is nothing but the answers you have typed
-// into it, so everything the user has entered is written down before the
-// page goes away and read back on the way up.
+// into it, so everything the user has entered is written down before that
+// reload and read back on the way up. Only that reload: any other one is a
+// fresh start (`sessionToResume`).
 //
 // This is the pure half: the shape of a saved session and how to read one
 // back. Reading is the interesting direction — the state was written by a
@@ -252,6 +253,19 @@ export function parseSession(
     folder: sanitizeFolder(r.folder),
     pak1Name: typeof r.pak1Name === "string" ? str(r.pak1Name, "") : null,
   };
+}
+
+/**
+ * The session a page load resumes, if any: only one written on the way into
+ * a self-update. A refresh, a click on the wordmark or a reopened tab is
+ * somebody asking for a clean installer, and gets one; the update is the one
+ * reload the user did not ask for, so it is the one that must not cost them
+ * their answers.
+ */
+export function sessionToResume(
+  session: SavedSession | null,
+): SavedSession | null {
+  return session?.reason === "update" ? session : null;
 }
 
 /**

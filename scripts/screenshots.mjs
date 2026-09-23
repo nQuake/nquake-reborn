@@ -185,6 +185,10 @@ function stepsFor(scenario) {
     steps.push(
       {
         name: "client",
+        ready: "[data-testid=ezquake-latest]",
+      },
+      {
+        name: "addons",
         ready: "[data-testid=opt-textures]",
         before: async (p) => p.click("[data-testid=opt-fortress]"),
       },

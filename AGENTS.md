@@ -293,8 +293,10 @@ Steps are computed from the options **and the mode** (`stepsFor` in
   waiting for is usually off screen. Everything else a step can lack (a
   folder nobody picked, a catalog still loading) keeps Next disabled,
   because there is nothing on the step to point at.
-- **Advanced** unfolds client → config (keys, mouse, custom binds, preset
-  preview) and/or server (identity, ports, passwords, services, binaries,
+- **Advanced** unfolds client (which ezQuake, `pak1.pak`) → add-ons
+  (24-bit / QRP textures, Team Fortress, Clan Arena — game content, not a
+  client choice, so a step of its own) → config (keys, mouse, custom binds,
+  preset preview) and/or server (identity, ports, passwords, services, binaries,
   content) between target and folder. The switch sits in the card header;
   switching to Advanced from folder/review jumps back to the first unlocked
   step; the Review step offers the jump too.
@@ -313,7 +315,12 @@ lazily on the first write) and Next works straight away.
 The install step's file list is a log, not a status line: `InstallProgress`
 carries `recent`, the last `RECENT_LIMIT` files that finished **in the order
 they finished** (`items` is keyed by destination and in plan order, which
-cannot say when anything landed), and `FileLog` tails it.
+cannot say when anything landed), and `FileLog` tails it. Under the tail it
+shows each file in flight with a spinner, its percentage and bytes (read from
+`items`, against the plan's sizes) and a fill behind the row; once the
+downloads are over, `finishing` names what the run is doing instead
+(packing `configs.pk3`, writing the record and readme), and each archive
+lands in `recent` like any other file.
 
 **An install is two workloads, and both halves have to be modelled.** The
 queue runs largest first, so a client install is ~70 files carrying nearly
@@ -351,11 +358,17 @@ reloads itself when the deployed `BUILD_LABEL` differs from the running one.
 Rollbacks count: it is the deployed build that is right, not the higher
 number.
 
-**Reloading a wizard is only acceptable because nothing is lost.**
-`app/wizard.ts` writes the answers into `sessionStorage` on every change —
-mode, step, the whole `InstallOptions`, the folder, the name of a chosen
-`pak1.pak` — and reads them back at mount, so a refresh, a crashed tab or a
-self-update all resume mid-flow. Two decisions shape it, both in `domain/`:
+**Reloading a wizard is only acceptable because nothing is lost.** On the
+way into a self-update, `app/wizard.ts` writes the answers into
+`sessionStorage` (`saveNow("update")`) — mode, step, the whole
+`InstallOptions`, the folder, the name of a chosen `pak1.pak` — and reads
+them back at mount, so the new build resumes mid-flow. **Only that reload
+resumes.** A refresh, a click on the wordmark (which calls `reset` in place)
+or a reopened tab is somebody asking for a clean install and gets one:
+nothing is saved outside the update path, the saved session is cleared as
+soon as it is read (so a refresh after an update is a plain refresh too),
+and `session.ts#sessionToResume` ignores anything whose `reason` is not
+`"update"`. Two decisions shape it, both in `domain/`:
 
 - **`session.ts` is written by one build and read by another.** Never trust
   the blob: `parseSession` drops another `SESSION_SCHEMA` or anything over a

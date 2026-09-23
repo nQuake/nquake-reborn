@@ -126,7 +126,7 @@ browser.
 | `src/domain` | `options.ts` (everything the wizard asks + defaults), `plan.ts` (options → the list of files: `buildPlan`, `renderTemplate`), `configs.ts` (preset.cfg, KTX port/pwd, qtv.cfg, qwfwd.cfg, client launcher, start/stop scripts), `manifest.ts` / `upstream.ts` (index shapes + parsers), `install-state.ts` (`nquake-reborn.json`, `canReuse`), `session.ts` (what survives a reload) / `update.ts` (when the app may replace itself), `paths.ts` (names a browser cannot create), `pk3.ts` (the zip writer that gets round them), `readme.ts` (`README-nquake.txt`), `format.ts`, `progress.ts`, `platform.ts` | nothing outside domain |
 | `src/net` | `sources.ts` (URLs, index loading, env overrides), `version.ts` (the deploy's own `version.json`), `transport.ts` (fetch + retry/backoff; 404 is final), `installer.ts` (`runInstall`: worker pool, progress, failures collected, record + readme + chmod at the end) | domain, platform types |
 | `src/platform` | `capabilities.ts` (which surface; real or simulated), `destination.ts` (the seam — `canSetExecutable`, `nameRules`), `fs-access.ts`, `tauri.ts`, `mock.ts` (mock destination + mock transport) | domain |
-| `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue, `RequiredMark`, `CommandBlock` — the terminal block with the copy button…), `Stepper.tsx` (`Stepper`, the desktop list; `StepperCompact`, the phone strip that rides in the sticky header), `use-flagged-field.ts`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
+| `src/ui` | `primitives.tsx` (Button, Card, Field, Toggle, ChoiceCard, Callout, ProgressBar, KeyValue, `InfoTip` (the "?" with a tooltip), `RequiredMark`, `CommandBlock` — the terminal block with the copy button…), `Stepper.tsx` (`Stepper`, the desktop list; `StepperCompact`, the phone strip that rides in the sticky header), `use-flagged-field.ts`, `icons.tsx`, `steps/*Step.tsx` | domain, app types |
 | `src/app` | `wizard.ts` (state, flow, catalog loading, install run, saving and restoring the answers), `App.tsx` (shell, mode switch, nav), `self-update.ts` (the version poll) + `session-store.ts` (the `sessionStorage` glue), `main.tsx`, `theme.ts`, `text-size.ts` | everything |
 | `tests/` | vitest suites mirroring `src/`; `tests/fixtures/upstream.json` | |
 | `scripts/` | `screenshots.mjs`, `mirror-upstream.mjs`, `release/*` (changeset + changelog tooling, copied from the notes app) | |
@@ -146,7 +146,8 @@ destination — that is how an upstream `mvdsv` wins over the bundled one.
   + `gpl/id1/readme.txt` are dropped.
 - Client: `gpl` (skip `ezquake.exe` unless Windows *and* using the bundled
   client), `non-gpl` (skip `ezquake/sb/wget.exe` off Windows), `textures`
-  (default on), `addon-textures` / `addon-fortress` / `addon-clanarena`
+  (default on; left out when `addon-textures` is on, since QRP overrides
+  it — `installsTextures`), `addon-textures` / `addon-fortress` / `addon-clanarena`
   (opt), `linux` (cfg only, never the tarball), `macosx` (cfg; the old
   `.app` only as fallback), upstream ezQuake for the platform, generated
   `ezquake/configs/preset.cfg`, and on Linux/macOS a generated

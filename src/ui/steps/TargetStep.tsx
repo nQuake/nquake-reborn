@@ -153,15 +153,6 @@ export function TargetStep({ ctx }: { ctx: WizardCtx }) {
           </div>
         </div>
       )}
-
-      {/* Simple says nothing here: the mode switch is in the card header,
-          right above this, and a paragraph repeating it only pads the step. */}
-      {!simple && (
-        <p className="text-sm text-muted" data-testid="mode-hint">
-          <strong className="text-fg">Advanced</strong>: the next steps let you
-          pick the ezQuake build, add-ons, keys, and every server setting.
-        </p>
-      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // The small vocabulary every step is built from: Button, Card, Field,
-// Toggle, ChoiceCard, Callout, ProgressBar, Badge, CommandBlock. Tailwind
+// Toggle, ChoiceCard, Callout, ProgressBar, Badge, InfoTip, CommandBlock. Tailwind
 // utilities over the tokens in `styles/theme.css`.
 
 import type { ComponentChildren, JSX } from "preact";
@@ -376,6 +376,68 @@ export function KeyValue({
         </div>
       ))}
     </dl>
+  );
+}
+
+/**
+ * A "?" that explains something in a tooltip instead of a line of small
+ * print. Hover and keyboard focus show it from CSS; a click (a tap, on a
+ * phone, where there is no hover) pins it open until the next tap anywhere
+ * or Escape. It opens above and right-aligned, since it mostly sits at the
+ * right edge of a KeyValue row where anything wider would leave the card.
+ */
+export function InfoTip({
+  children,
+  label = "More information",
+  testId,
+}: {
+  children: ComponentChildren;
+  label?: string;
+  testId?: string;
+}) {
+  const [pinned, setPinned] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!pinned) return;
+    const away = (e: Event) => {
+      if (!ref.current?.contains(e.target as Node)) setPinned(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setPinned(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [pinned]);
+
+  return (
+    <span ref={ref} className="group relative inline-flex align-middle">
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={pinned}
+        onClick={() => setPinned((p) => !p)}
+        data-testid={testId}
+        className="focus-ring inline-flex cursor-help items-center justify-center rounded-full text-muted transition hover:text-fg-bright"
+      >
+        <InfoIcon className="h-4 w-4" />
+      </button>
+      <span
+        role="tooltip"
+        className={`pointer-events-none absolute right-0 bottom-full z-20 mb-2 w-max max-w-[16rem] rounded-md border border-line-strong bg-surface-3 px-3 py-2 text-left text-xs leading-snug font-normal text-fg shadow-lg shadow-black/30 transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 ${
+          pinned
+            ? "visible translate-y-0 opacity-100"
+            : "invisible translate-y-1 opacity-0"
+        }`}
+      >
+        {children}
+        <span
+          aria-hidden="true"
+          className="absolute top-full right-1.5 -mt-px h-0 w-0 border-x-[5px] border-t-[5px] border-x-transparent border-t-line-strong"
+        />
+      </span>
+    </span>
   );
 }
 

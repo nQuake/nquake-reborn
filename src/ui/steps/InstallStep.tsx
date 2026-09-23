@@ -22,12 +22,31 @@ const LOG_ROWS = 10;
  */
 /** A small turning mark for a line that is still happening. */
 function Spinner() {
+  // A ring a little wider than the `+` / `=` column it sits in, centred on
+  // it rather than squeezed into it, so file names stay aligned.
   return (
-    <span className="flex w-[1ch] shrink-0 items-center justify-center">
-      <span
-        aria-hidden="true"
-        className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-[1.5px] border-accent border-t-transparent motion-reduce:animate-none"
-      />
+    <span className="relative w-[1ch] shrink-0" aria-hidden="true">
+      <svg
+        viewBox="0 0 16 16"
+        className="absolute left-1/2 top-1/2 h-[0.75rem] w-[0.75rem] -translate-x-1/2 -translate-y-1/2 animate-spin text-accent motion-reduce:animate-none"
+      >
+        <circle
+          cx="8"
+          cy="8"
+          r="6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          opacity="0.25"
+        />
+        <path
+          d="M8 2a6 6 0 0 1 6 6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+      </svg>
     </span>
   );
 }
@@ -97,10 +116,11 @@ function FileLog({
             <div
               key={dest}
               data-testid="install-log-active"
-              className="flex gap-2 rounded-sm"
+              className="-mx-1.5 flex gap-2 rounded-sm px-1.5"
               style={{
                 // The row fills as the file arrives, like a progress bar
-                // drawn behind the text.
+                // drawn behind the text. It reaches out past the spinner on
+                // the left, so the bar starts before the line does.
                 background: `linear-gradient(to right, var(--accent-wash) ${pct}%, transparent ${pct}%)`,
               }}
             >
